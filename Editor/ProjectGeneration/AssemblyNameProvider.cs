@@ -21,6 +21,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		string GetAssemblyNameFromScriptPath(string path);
 		string GetAssemblyName(string assemblyOutputPath, string assemblyName);
 		bool IsInternalizedPackagePath(string path);
+		bool IsInternalizedPackage(UnityEditor.PackageManager.PackageInfo packageInfo);
 		IEnumerable<Assembly> GetAssemblies(Func<string, bool> shouldFileBePartOfSolution);
 		IEnumerable<string> GetAllAssetPaths();
 		UnityEditor.PackageManager.PackageInfo FindForAssetPath(string assetPath);
@@ -146,6 +147,12 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			{
 				return false;
 			}
+
+			return IsInternalizedPackage(packageInfo);
+		}
+
+		public bool IsInternalizedPackage(UnityEditor.PackageManager.PackageInfo packageInfo)
+		{
 			var packageSource = packageInfo.source;
 			switch (packageSource)
 			{

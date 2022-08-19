@@ -35,13 +35,29 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		string SolutionFile();
 		string ProjectDirectory { get; }
 		IAssemblyNameProvider AssemblyNameProvider { get; }
+		IList<string> ExcludedPackages { get; set; }
+		IEnumerable<string> PackagesFilteredByProjectGenerationFlags { get; }
 	}
 
 	public class ProjectGeneration : IGenerator
 	{
 		public static readonly string MSBuildNamespaceUri = "http://schemas.microsoft.com/developer/msbuild/2003";
+
+		private const string _excludedPackagesPathsKeyFormat = "unity_project_generation_excludedpackages_{0}";
+		private static readonly string _excludedPackagesKey = string.Format(_excludedPackagesPathsKeyFormat, PlayerSettings.productGUID);
+
 		public IAssemblyNameProvider AssemblyNameProvider => m_AssemblyNameProvider;
 		public string ProjectDirectory { get; }
+
+		public IList<string> ExcludedPackages
+		{
+			get => m_ExcludedPackages;
+			set
+			{
+				EditorPrefs.SetString(_excludedPackagesKey, string.Join(";", value));
+				m_ExcludedPackages = value.ToList();
+			}
+		}
 
 		const string k_WindowsNewline = "\r\n";
 
@@ -64,6 +80,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		readonly IGUIDGenerator m_GUIDGenerator;
 		bool m_ShouldGenerateAll;
 		IVisualStudioInstallation m_CurrentInstallation;
+		List<string> m_ExcludedPackages = EditorPrefs.GetString(_excludedPackagesKey, null)?.Split(";").ToList();
 
 		public ProjectGeneration() : this(Directory.GetParent(Application.dataPath).FullName)
 		{
@@ -223,14 +240,31 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private bool ShouldFileBePartOfSolution(string file)
 		{
-			// Exclude files coming from packages except if they are internalized.
-			if (m_AssemblyNameProvider.IsInternalizedPackagePath(file))
-			{
+			if (string.IsNullOrEmpty(file.Trim()))
 				return false;
-			}
 
-			return IsSupportedFile(file);
+			if (IsSupportedFile(file) == false)
+				return false;
+
+			// Exclude files coming from packages except if they are internalized...
+			var packageInfo = m_AssemblyNameProvider.FindForAssetPath(file);
+			if (packageInfo == null)
+				return true;
+
+			if (m_AssemblyNameProvider.IsInternalizedPackage(packageInfo))
+				return false;
+
+			// ... or if they are excluded by name
+			if(m_ExcludedPackages.Contains(packageInfo.name))
+				return false;
+
+			return true;
 		}
+
+		public IEnumerable<string> PackagesFilteredByProjectGenerationFlags =>
+			UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages()
+			.Where(p => m_AssemblyNameProvider.IsInternalizedPackage(p) == false)
+			.Select(p => p.name);
 
 		private static string GetExtensionWithoutDot(string path)
 		{

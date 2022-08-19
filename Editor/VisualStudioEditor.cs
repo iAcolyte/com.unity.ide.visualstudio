@@ -12,6 +12,7 @@ using System.Runtime.CompilerServices;
 using UnityEditor;
 using UnityEngine;
 using Unity.CodeEditor;
+using System.Collections.Generic;
 
 [assembly: InternalsVisibleTo("Unity.VisualStudio.EditorTests")]
 [assembly: InternalsVisibleTo("Unity.VisualStudio.Standalone.EditorTests")]
@@ -32,6 +33,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		private static readonly AsyncOperation<IVisualStudioInstallation[]> _discoverInstallations;
 
 		private readonly IGenerator _generator = new ProjectGeneration();
+		private bool _showAssemblies;
+		private Dictionary<string, bool> _packageFilter;
 
 		static VisualStudioEditor()
 		{
@@ -126,8 +129,49 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			SettingsButton(ProjectGenerationFlag.LocalTarBall, "Local tarball", "");
 			SettingsButton(ProjectGenerationFlag.Unknown, "Packages from unknown sources", "");
 			SettingsButton(ProjectGenerationFlag.PlayerAssemblies, "Player projects", "For each player project generate an additional csproj with the name 'project-player.csproj'");
+
+			ListPackagesFilter();
+
 			RegenerateProjectFiles();
 			EditorGUI.indentLevel--;
+		}
+
+		private void ListPackagesFilter()
+		{
+			_showAssemblies = EditorGUILayout.BeginFoldoutHeaderGroup(_showAssemblies, new GUIContent("Advanced filters"));
+			if (_showAssemblies)
+			{
+				if (_packageFilter == null)
+					_packageFilter = _generator.ExcludedPackages.ToDictionary(p => p, _ => false);
+
+				var eligiblePackages = _generator.PackagesFilteredByProjectGenerationFlags.OrderBy(p => p);
+
+				var isDirty = false;
+				EditorGUI.indentLevel++;
+				
+				foreach (var package in eligiblePackages)
+				{
+					if (_packageFilter.TryGetValue(package, out var wasEnabled) == false)
+						_packageFilter.Add(package, wasEnabled = true);
+
+					var isEnabled = EditorGUILayout.Toggle(new GUIContent(package), wasEnabled);
+					if (isEnabled != wasEnabled)
+					{
+						_packageFilter[package] = isEnabled;
+						isDirty = true;
+					}
+				}
+				EditorGUI.indentLevel--;
+
+				if(isDirty)
+				{
+					_generator.ExcludedPackages = _packageFilter
+						.Where(kvp => kvp.Value == false)
+						.Select(kvp => kvp.Key)
+						.ToList();
+				}
+			}
+			EditorGUILayout.EndFoldoutHeaderGroup();
 		}
 
 		void RegenerateProjectFiles()
