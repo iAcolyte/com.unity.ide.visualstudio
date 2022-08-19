@@ -56,8 +56,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			get => m_ExcludedPackages;
 			set
 			{
-				EditorPrefs.SetString(_excludedPackagesKey, string.Join(";", value));
-				m_ExcludedPackages = value.ToList();
+				EditorPrefs.SetString(_excludedPackagesKey, value == null ? "" : string.Join(";", value));
+				m_ExcludedPackages = value?.ToList() ?? new List<string>();
 			}
 		}
 
@@ -66,8 +66,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			get => m_ExcludedAssemblies;
 			set
 			{
-				EditorPrefs.SetString(_excludedAssembliesKey, string.Join(";", value));
-				m_ExcludedAssemblies = value.ToList();
+				EditorPrefs.SetString(_excludedAssembliesKey, value == null ? "" : string.Join(";", value));
+				m_ExcludedAssemblies = value?.ToList() ?? new List<string>();
 			}
 		}
 
@@ -92,8 +92,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		readonly IGUIDGenerator m_GUIDGenerator;
 		bool m_ShouldGenerateAll;
 		IVisualStudioInstallation m_CurrentInstallation;
-		List<string> m_ExcludedPackages = EditorPrefs.GetString(_excludedPackagesKey, null)?.Split(";").ToList();
-		List<string> m_ExcludedAssemblies = EditorPrefs.GetString(_excludedAssembliesKey, null)?.Split(";").ToList();
+		List<string> m_ExcludedPackages = GetEditorPrefsStringList(_excludedPackagesKey);
+		List<string> m_ExcludedAssemblies = GetEditorPrefsStringList(_excludedAssembliesKey);
 
 		public ProjectGeneration() : this(Directory.GetParent(Application.dataPath).FullName)
 		{
@@ -289,6 +289,14 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		public IEnumerable<UnityEditor.PackageManager.PackageInfo> PackagesFilteredByProjectGenerationFlags =>
 			UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages()
 			.Where(p => m_AssemblyNameProvider.IsInternalizedPackage(p) == false);
+
+		private static List<string> GetEditorPrefsStringList(string key)
+		{
+			return EditorPrefs.GetString(key, null)?
+				.Split(";", StringSplitOptions.RemoveEmptyEntries)
+				.ToList()
+				?? new List<string>();
+		}
 
 		private static string GetExtensionWithoutDot(string path)
 		{
