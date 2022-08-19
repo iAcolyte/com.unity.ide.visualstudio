@@ -143,33 +143,104 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			if (_showAdvancedFilters)
 			{
 				ListAdvancedPackageFilters();
-				EditorGUILayout.Separator();
-				ListAdvancedAssemblyFilters();
 			}
 			EditorGUILayout.EndFoldoutHeaderGroup();
 		}
+        private class AsmHelpa
+        {
+            internal string PackageId;
+            internal string Path;
+            internal string Id;
+			internal string DisplayName;
+        }
 
-		private void ListAdvancedPackageFilters()
+        private class PkgHelpa
+        {
+			internal string Id;
+			internal string DisplayName;
+			internal IEnumerable<AsmHelpa> Assemblies;
+        }
+
+        private void ListAdvancedPackageFilters()
 		{
 			if (_packageFilter == null)
+			{
 				_packageFilter = _generator.ExcludedPackages?.ToDictionary(p => p, _ => false) ?? new Dictionary<string, bool>();
+				_assemblyFilter = _generator.ExcludedAssemblies?.ToDictionary(p => p, _ => false) ?? new Dictionary<string, bool>();
+			}
 
-			var eligiblePackages = _generator.PackagesFilteredByProjectGenerationFlags.OrderBy(p => p);
+			var eligiblePackages = _generator.PackagesFilteredByProjectGenerationFlags
+				.Select(p => new PkgHelpa { Id = p.name, DisplayName = string.IsNullOrWhiteSpace(p.displayName) ? p.name : p.displayName })
+				.OrderBy(ph => ph.DisplayName);
 
-			var isDirty = false;
+			var filteredPackages = _generator.PackagesFilteredByProjectGenerationFlags
+				.Where(p => _generator.ExcludedPackages.Contains(p.name) == false)
+				.ToList();
+
+			var eligibleAssemblies = UnityEditor.Compilation.CompilationPipeline.GetAssemblies()
+				.Select(a =>
+				{
+					var assemblyPath = UnityEditor.Compilation.CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(a.name);
+					if (assemblyPath == null)
+						// "Assembly-CSharp"
+						return null;
+
+					var asset = AssetDatabase.LoadAssetAtPath<UnityEditorInternal.AssemblyDefinitionAsset>(assemblyPath);
+
+					var assemblyName = Path.GetFileName(assemblyPath);
+
+					var package = _generator.AssemblyNameProvider.FindForAssetPath(assemblyPath);
+					if (package == null)
+						// .asmdef in /Assets, no package
+						return new AsmHelpa { Id = assemblyName, Path = assemblyPath, DisplayName = assemblyName };
+
+					// .asmdef within a package
+					return new AsmHelpa { PackageId = package.name, Id = assemblyName, Path = assemblyPath, DisplayName = assemblyName };
+				})
+				.Where(ah => ah != null)
+				.OrderBy(ah => ah.DisplayName);
+
+			// join by package id
+			var eligiblePackages2 = eligiblePackages.GroupJoin(eligibleAssemblies.Where(a => a != null && a.PackageId != null),
+				p => p.Id, a => a.PackageId,
+				(p, aa) => new PkgHelpa { Id = p.Id, DisplayName = p.DisplayName, Assemblies = aa })
+				.ToList();
+
+            // prepend "empty package" containing the .asmdefs in Assets folder
+            eligiblePackages2.Insert(0, new PkgHelpa { DisplayName = "Assets", Assemblies = eligibleAssemblies.Where(a => a != null && a.PackageId == null) });
+
+            var isDirty = false;
 			EditorGUI.indentLevel++;
 
-			foreach (var package in eligiblePackages)
+			foreach (var package in eligiblePackages2)
 			{
-				if (_packageFilter.TryGetValue(package, out var wasEnabled) == false)
-					_packageFilter.Add(package, wasEnabled = true);
-
-				var isEnabled = EditorGUILayout.Toggle(new GUIContent(package), wasEnabled);
-				if (isEnabled != wasEnabled)
+				bool isEnabled = true;
+				if (package.Id == null)
 				{
-					_packageFilter[package] = isEnabled;
-					isDirty = true;
+					EditorGUI.BeginDisabledGroup(true);
+					EditorGUILayout.Toggle(package.DisplayName, true);
+					EditorGUI.EndDisabledGroup();
 				}
+				else
+				{
+					if (_packageFilter.TryGetValue(package.Id, out var wasEnabled) == false)
+						_packageFilter.Add(package.Id, wasEnabled = true);
+
+					isEnabled = EditorGUILayout.Toggle(package.DisplayName, wasEnabled);
+
+					if (isEnabled != wasEnabled)
+					{
+						_packageFilter[package.Id] = isEnabled;
+						isDirty = true;
+					}
+				}
+				EditorGUI.indentLevel++;
+				if (isEnabled)
+                {
+					isDirty = Dudel(package);
+				}
+				EditorGUI.indentLevel--;
+
 			}
 			EditorGUI.indentLevel--;
 
@@ -179,58 +250,33 @@ namespace Microsoft.Unity.VisualStudio.Editor
 					.Where(kvp => kvp.Value == false)
 					.Select(kvp => kvp.Key)
 					.ToList();
-			}
-		}
 
-		private void ListAdvancedAssemblyFilters()
-		{
-			if (_assemblyFilter == null)
-				_assemblyFilter = _generator.ExcludedAssemblies?.ToDictionary(p => p, _ => false) ?? new Dictionary<string, bool>();
-
-			var packages = _generator.PackagesFilteredByProjectGenerationFlags
-				.Where(p => _generator.ExcludedPackages.Contains(p) == false)
-				.ToList();
-
-			var eligibleAssemblies = UnityEditor.Compilation.CompilationPipeline.GetAssemblies()
-				.Select(a => UnityEditor.Compilation.CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(a.name))
-				.Where(path =>
-				{
-					if (path == null)
-						return false;
-
-					var package = _generator.AssemblyNameProvider.FindForAssetPath(path);
-					if (package == null)
-						return true;
-
-					return packages.Contains(package.name);
-				})
-				.Select(path => Path.GetFileName(path))
-				.ToList();
-
-			var isDirty = false;
-			EditorGUI.indentLevel++;
-
-			foreach (var assembly in eligibleAssemblies)
-			{
-				if (_assemblyFilter.TryGetValue(assembly, out var wasEnabled) == false)
-					_assemblyFilter.Add(assembly, wasEnabled = true);
-
-				var isEnabled = EditorGUILayout.Toggle(new GUIContent(assembly), wasEnabled);
-				if (isEnabled != wasEnabled)
-				{
-					_assemblyFilter[assembly] = isEnabled;
-					isDirty = true;
-				}
-			}
-			EditorGUI.indentLevel--;
-
-			if (isDirty)
-			{
 				_generator.ExcludedAssemblies = _assemblyFilter
 					.Where(kvp => kvp.Value == false)
 					.Select(kvp => kvp.Key)
 					.ToList();
 			}
+		}
+
+        private bool Dudel(PkgHelpa package)
+        {
+			if (package.Assemblies == null)
+				return false;
+
+			var isDirty = false;
+			foreach (var assembly in package.Assemblies)
+			{
+				if (_assemblyFilter.TryGetValue(assembly.Id, out var wasEnabled) == false)
+					_assemblyFilter.Add(assembly.Id, wasEnabled = true);
+
+				var isEnabled = EditorGUILayout.Toggle(assembly.DisplayName, wasEnabled);
+				if (isEnabled != wasEnabled)
+				{
+					_assemblyFilter[assembly.Id] = isEnabled;
+					isDirty = true;
+				}
+			}
+			return isDirty;
 		}
 
 		void RegenerateProjectFiles()

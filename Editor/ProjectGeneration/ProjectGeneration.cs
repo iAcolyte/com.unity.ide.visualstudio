@@ -37,7 +37,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		IAssemblyNameProvider AssemblyNameProvider { get; }
 		IList<string> ExcludedPackages { get; set; }
 		IList<string> ExcludedAssemblies { get; set; }
-		IEnumerable<string> PackagesFilteredByProjectGenerationFlags { get; }
+		IEnumerable<UnityEditor.PackageManager.PackageInfo> PackagesFilteredByProjectGenerationFlags { get; }
 	}
 
 	public class ProjectGeneration : IGenerator
@@ -283,10 +283,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			return true;
 		}
 
-		public IEnumerable<string> PackagesFilteredByProjectGenerationFlags =>
+		public IEnumerable<UnityEditor.PackageManager.PackageInfo> PackagesFilteredByProjectGenerationFlags =>
 			UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages()
-			.Where(p => m_AssemblyNameProvider.IsInternalizedPackage(p) == false)
-			.Select(p => p.name);
+			.Where(p => m_AssemblyNameProvider.IsInternalizedPackage(p) == false);
 
 		private static string GetExtensionWithoutDot(string path)
 		{
