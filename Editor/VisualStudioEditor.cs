@@ -244,7 +244,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 						if (_packageFilter.TryGetValue(package.Id, out var wasEnabled) == false)
 							_packageFilter.Add(package.Id, wasEnabled = true);
 
-						isEnabled = EditorGUILayout.Toggle(package.DisplayName, wasEnabled);
+						isEnabled = DrawToggle(package.DisplayName, wasEnabled);
 
 						if (isEnabled != wasEnabled)
 						{
@@ -290,7 +290,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				if (_assemblyFilter.TryGetValue(assembly.Id, out var wasEnabled) == false)
 					_assemblyFilter.Add(assembly.Id, wasEnabled = true);
 
-				var isEnabled = EditorGUILayout.Toggle(assembly.DisplayName, wasEnabled);
+				bool isEnabled = DrawToggle(assembly.DisplayName, wasEnabled);
+
 				if (isEnabled != wasEnabled)
 				{
 					_assemblyFilter[assembly.Id] = isEnabled;
@@ -298,6 +299,19 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				}
 			}
 			return isDirty;
+		}
+
+		private static bool DrawToggle(string label, bool wasEnabled)
+		{
+			var isEnabled = EditorGUILayout.Toggle(label, wasEnabled);
+			if (GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition))
+			{
+				if (Event.current.shift)
+					isEnabled = false;
+				else if (Event.current.control)
+					isEnabled = true;
+			}
+			return isEnabled;
 		}
 
 		void RegenerateProjectFiles()
