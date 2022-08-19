@@ -219,10 +219,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 				var rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect(new GUILayoutOption[] { }));
 				rect.width = 252;
-				if (GUI.Button(rect, "Reset"))
+				if (GUI.Button(rect, "Reset filters"))
 				{
 					_generator.ExcludedPackages = null;
 					_generator.ExcludedAssemblies = null;
+					InitializeAdvancedFilters();
 				}
 
 				var isDirty = false;
