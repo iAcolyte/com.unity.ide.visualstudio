@@ -36,6 +36,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		string ProjectDirectory { get; }
 		IAssemblyNameProvider AssemblyNameProvider { get; }
 		IList<string> ExcludedPackages { get; set; }
+		IList<string> ExcludedAssemblies { get; set; }
 		IEnumerable<string> PackagesFilteredByProjectGenerationFlags { get; }
 	}
 
@@ -45,7 +46,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private const string _excludedPackagesPathsKeyFormat = "unity_project_generation_excludedpackages_{0}";
 		private static readonly string _excludedPackagesKey = string.Format(_excludedPackagesPathsKeyFormat, PlayerSettings.productGUID);
-
+		private const string _excludedAssembliesPathsKeyFormat = "unity_project_generation_excludedassemblies_{0}";
+		private static readonly string _excludedAssembliesKey = string.Format(_excludedAssembliesPathsKeyFormat, PlayerSettings.productGUID);
 		public IAssemblyNameProvider AssemblyNameProvider => m_AssemblyNameProvider;
 		public string ProjectDirectory { get; }
 
@@ -56,6 +58,16 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			{
 				EditorPrefs.SetString(_excludedPackagesKey, string.Join(";", value));
 				m_ExcludedPackages = value.ToList();
+			}
+		}
+
+		public IList<string> ExcludedAssemblies
+		{
+			get => m_ExcludedAssemblies;
+			set
+			{
+				EditorPrefs.SetString(_excludedAssembliesKey, string.Join(";", value));
+				m_ExcludedAssemblies = value.ToList();
 			}
 		}
 
@@ -81,6 +93,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		bool m_ShouldGenerateAll;
 		IVisualStudioInstallation m_CurrentInstallation;
 		List<string> m_ExcludedPackages = EditorPrefs.GetString(_excludedPackagesKey, null)?.Split(";").ToList();
+		List<string> m_ExcludedAssemblies = EditorPrefs.GetString(_excludedAssembliesKey, null)?.Split(";").ToList();
 
 		public ProjectGeneration() : this(Directory.GetParent(Application.dataPath).FullName)
 		{
@@ -246,17 +259,26 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			if (IsSupportedFile(file) == false)
 				return false;
 
-			// Exclude files coming from packages except if they are internalized...
 			var packageInfo = m_AssemblyNameProvider.FindForAssetPath(file);
-			if (packageInfo == null)
-				return true;
+			if (packageInfo != null)
+			{
+				// Exclude files coming from packages except if they are internalized...
+				if (m_AssemblyNameProvider.IsInternalizedPackage(packageInfo))
+					return false;
 
-			if (m_AssemblyNameProvider.IsInternalizedPackage(packageInfo))
-				return false;
+				// ... or if they are excluded by package name
+				if (m_ExcludedPackages.Contains(packageInfo.name))
+					return false;
+			}
 
-			// ... or if they are excluded by name
-			if(m_ExcludedPackages.Contains(packageInfo.name))
-				return false;
+			var containingAssemblyPath = CompilationPipeline.GetAssemblyDefinitionFilePathFromScriptPath(file);
+			if (containingAssemblyPath != null)
+			{
+				// ... or if they belong to a excluded .asmdef
+				var containingAssemblyFilename = Path.GetFileName(containingAssemblyPath);
+				if (m_ExcludedAssemblies.Contains(containingAssemblyFilename))
+					return false;
+			}
 
 			return true;
 		}

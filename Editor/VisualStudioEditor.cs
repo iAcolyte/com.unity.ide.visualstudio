@@ -33,8 +33,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		private static readonly AsyncOperation<IVisualStudioInstallation[]> _discoverInstallations;
 
 		private readonly IGenerator _generator = new ProjectGeneration();
-		private bool _showAssemblies;
+		private bool _showAdvancedFilters;
 		private Dictionary<string, bool> _packageFilter;
+		private Dictionary<string, bool> _assemblyFilter;
 
 		static VisualStudioEditor()
 		{
@@ -130,48 +131,106 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			SettingsButton(ProjectGenerationFlag.Unknown, "Packages from unknown sources", "");
 			SettingsButton(ProjectGenerationFlag.PlayerAssemblies, "Player projects", "For each player project generate an additional csproj with the name 'project-player.csproj'");
 
-			ListPackagesFilter();
+			ListAdvancedFilters();
 
 			RegenerateProjectFiles();
 			EditorGUI.indentLevel--;
 		}
 
-		private void ListPackagesFilter()
+		private void ListAdvancedFilters()
 		{
-			_showAssemblies = EditorGUILayout.BeginFoldoutHeaderGroup(_showAssemblies, new GUIContent("Advanced filters"));
-			if (_showAssemblies)
+			_showAdvancedFilters = EditorGUILayout.BeginFoldoutHeaderGroup(_showAdvancedFilters, new GUIContent("Advanced filters"));
+			if (_showAdvancedFilters)
 			{
-				if (_packageFilter == null)
-					_packageFilter = _generator.ExcludedPackages.ToDictionary(p => p, _ => false);
-
-				var eligiblePackages = _generator.PackagesFilteredByProjectGenerationFlags.OrderBy(p => p);
-
-				var isDirty = false;
-				EditorGUI.indentLevel++;
-				
-				foreach (var package in eligiblePackages)
-				{
-					if (_packageFilter.TryGetValue(package, out var wasEnabled) == false)
-						_packageFilter.Add(package, wasEnabled = true);
-
-					var isEnabled = EditorGUILayout.Toggle(new GUIContent(package), wasEnabled);
-					if (isEnabled != wasEnabled)
-					{
-						_packageFilter[package] = isEnabled;
-						isDirty = true;
-					}
-				}
-				EditorGUI.indentLevel--;
-
-				if(isDirty)
-				{
-					_generator.ExcludedPackages = _packageFilter
-						.Where(kvp => kvp.Value == false)
-						.Select(kvp => kvp.Key)
-						.ToList();
-				}
+				ListAdvancedPackageFilters();
+				EditorGUILayout.Separator();
+				ListAdvancedAssemblyFilters();
 			}
 			EditorGUILayout.EndFoldoutHeaderGroup();
+		}
+
+		private void ListAdvancedPackageFilters()
+		{
+			if (_packageFilter == null)
+				_packageFilter = _generator.ExcludedPackages?.ToDictionary(p => p, _ => false) ?? new Dictionary<string, bool>();
+
+			var eligiblePackages = _generator.PackagesFilteredByProjectGenerationFlags.OrderBy(p => p);
+
+			var isDirty = false;
+			EditorGUI.indentLevel++;
+
+			foreach (var package in eligiblePackages)
+			{
+				if (_packageFilter.TryGetValue(package, out var wasEnabled) == false)
+					_packageFilter.Add(package, wasEnabled = true);
+
+				var isEnabled = EditorGUILayout.Toggle(new GUIContent(package), wasEnabled);
+				if (isEnabled != wasEnabled)
+				{
+					_packageFilter[package] = isEnabled;
+					isDirty = true;
+				}
+			}
+			EditorGUI.indentLevel--;
+
+			if (isDirty)
+			{
+				_generator.ExcludedPackages = _packageFilter
+					.Where(kvp => kvp.Value == false)
+					.Select(kvp => kvp.Key)
+					.ToList();
+			}
+		}
+
+		private void ListAdvancedAssemblyFilters()
+		{
+			if (_assemblyFilter == null)
+				_assemblyFilter = _generator.ExcludedAssemblies?.ToDictionary(p => p, _ => false) ?? new Dictionary<string, bool>();
+
+			var packages = _generator.PackagesFilteredByProjectGenerationFlags
+				.Where(p => _generator.ExcludedPackages.Contains(p) == false)
+				.ToList();
+
+			var eligibleAssemblies = UnityEditor.Compilation.CompilationPipeline.GetAssemblies()
+				.Select(a => UnityEditor.Compilation.CompilationPipeline.GetAssemblyDefinitionFilePathFromAssemblyName(a.name))
+				.Where(path =>
+				{
+					if (path == null)
+						return false;
+
+					var package = _generator.AssemblyNameProvider.FindForAssetPath(path);
+					if (package == null)
+						return true;
+
+					return packages.Contains(package.name);
+				})
+				.Select(path => Path.GetFileName(path))
+				.ToList();
+
+			var isDirty = false;
+			EditorGUI.indentLevel++;
+
+			foreach (var assembly in eligibleAssemblies)
+			{
+				if (_assemblyFilter.TryGetValue(assembly, out var wasEnabled) == false)
+					_assemblyFilter.Add(assembly, wasEnabled = true);
+
+				var isEnabled = EditorGUILayout.Toggle(new GUIContent(assembly), wasEnabled);
+				if (isEnabled != wasEnabled)
+				{
+					_assemblyFilter[assembly] = isEnabled;
+					isDirty = true;
+				}
+			}
+			EditorGUI.indentLevel--;
+
+			if (isDirty)
+			{
+				_generator.ExcludedAssemblies = _assemblyFilter
+					.Where(kvp => kvp.Value == false)
+					.Select(kvp => kvp.Key)
+					.ToList();
+			}
 		}
 
 		void RegenerateProjectFiles()
