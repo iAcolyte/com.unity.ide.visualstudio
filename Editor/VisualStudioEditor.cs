@@ -246,7 +246,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 					EditorGUI.indentLevel++;
 					if (isEnabled)
 					{
-						isDirty = DrawAssemblyFilters(package);
+						isDirty = DrawAssemblyFilters(package) || isDirty;
 					}
 					EditorGUI.indentLevel--;
 
