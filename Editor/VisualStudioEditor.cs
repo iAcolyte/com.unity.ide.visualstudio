@@ -155,8 +155,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private void InitializeAdvancedFilters()
         {
-			_packageFilter = _generator.ExcludedPackages?.ToDictionary(p => p, _ => false) ?? new Dictionary<string, bool>();
-			_assemblyFilter = _generator.ExcludedAssemblies?.ToDictionary(p => p, _ => false) ?? new Dictionary<string, bool>();
+			_packageFilter = CreateFilterDictionary(_generator.ExcludedPackages);
+			_assemblyFilter = CreateFilterDictionary(_generator.ExcludedAssemblies);
 
 			var eligiblePackages = _generator.PackagesFilteredByProjectGenerationFlags
 				.Select(p => new PackageWrapper { Id = p.name, DisplayName = string.IsNullOrWhiteSpace(p.displayName) ? p.name : p.displayName })
@@ -201,7 +201,15 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				_packageAssemblyHierarchy.Insert(0, new PackageWrapper { DisplayName = "Assets", Assemblies = assetsAssemblies });
 		}
 
-		private void DrawAdvancedFilters()
+        private Dictionary<string, bool> CreateFilterDictionary(IList<string> excludedPackages)
+        {
+            return excludedPackages?
+				.Where(p => string.IsNullOrWhiteSpace(p) == false)
+				.ToDictionary(p => p, _ => false)
+				?? new Dictionary<string, bool>();
+		}
+
+        private void DrawAdvancedFilters()
 		{
 			_showAdvancedFilters = EditorGUILayout.BeginFoldoutHeaderGroup(_showAdvancedFilters, new GUIContent("Advanced filters"));
 			if (_showAdvancedFilters)
