@@ -271,13 +271,16 @@ namespace Microsoft.Unity.VisualStudio.Editor
 					return false;
 			}
 
-			var containingAssemblyPath = CompilationPipeline.GetAssemblyDefinitionFilePathFromScriptPath(file);
-			if (containingAssemblyPath != null)
+			if (m_ExcludedAssemblies != null && m_ExcludedAssemblies.Count > 0)
 			{
-				// ... or if they belong to a excluded .asmdef
-				var containingAssemblyFilename = Path.GetFileName(containingAssemblyPath);
-				if (m_ExcludedAssemblies.Contains(containingAssemblyFilename))
-					return false;
+				var containingAssemblyPath = CompilationPipeline.GetAssemblyDefinitionFilePathFromScriptPath(file);
+				if (containingAssemblyPath != null)
+				{
+					// ... or if they belong to a excluded .asmdef
+					var containingAssemblyFilename = Path.GetFileName(containingAssemblyPath);
+					if (m_ExcludedAssemblies.Contains(containingAssemblyFilename))
+						return false;
+				}
 			}
 
 			return true;
