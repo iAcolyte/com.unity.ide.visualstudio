@@ -225,6 +225,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
             {
                 EnsureAdvancedFiltersCache();
 
+				EditorGUILayout.HelpBox("Hold Ctrl/Shift while moving the cursor over checkboxes below to bulk add/remove checkmarks", MessageType.Info);
+
                 var rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect(new GUILayoutOption[] { }));
                 rect.width = 252;
                 if (GUI.Button(rect, "Reset filters"))
