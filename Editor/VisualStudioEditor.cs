@@ -34,8 +34,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private readonly IGenerator _generator = new ProjectGeneration();
 		private bool _showAdvancedFilters;
-        private ProjectGenerationFlag _cachedFlag;
-        private Dictionary<string, bool> _packageFilter;
+		private ProjectGenerationFlag _cachedFlag;
+		private Dictionary<string, bool> _packageFilter;
 		private Dictionary<string, bool> _assemblyFilter;
 		private List<PackageWrapper> _packageAssemblyHierarchy;
 
@@ -222,74 +222,74 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		{
 			_showAdvancedFilters = EditorGUILayout.BeginFoldoutHeaderGroup(_showAdvancedFilters, new GUIContent("Advanced filters"));
 			if (_showAdvancedFilters)
-            {
-                EnsureAdvancedFiltersCache();
+			{
+				EnsureAdvancedFiltersCache();
 
 				EditorGUILayout.HelpBox("Hold Ctrl/Shift while moving the cursor over checkboxes below to bulk add/remove checkmarks", MessageType.Info);
 
-                var rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect(new GUILayoutOption[] { }));
-                rect.width = 252;
-                if (GUI.Button(rect, "Reset filters"))
-                {
-                    _generator.ExcludedPackages = null;
-                    _generator.ExcludedAssemblies = null;
-                    InitializeAdvancedFiltersCache();
-                }
+				var rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect(new GUILayoutOption[] { }));
+				rect.width = 252;
+				if (GUI.Button(rect, "Reset filters"))
+				{
+					_generator.ExcludedPackages = null;
+					_generator.ExcludedAssemblies = null;
+					InitializeAdvancedFiltersCache();
+				}
 
-                var isDirty = false;
-                EditorGUI.indentLevel++;
+				var isDirty = false;
+				EditorGUI.indentLevel++;
 
-                foreach (var package in _packageAssemblyHierarchy)
-                {
-                    bool isEnabled = true;
-                    if (package.Id == null)
-                    {
-                        // Draw disabled toggle (for Assets)
-                        EditorGUI.BeginDisabledGroup(true);
-                        EditorGUILayout.Toggle(package.DisplayName, isEnabled);
-                        EditorGUI.EndDisabledGroup();
-                    }
-                    else
-                    {
-                        if (_packageFilter.TryGetValue(package.Id, out var wasEnabled) == false)
-                            _packageFilter.Add(package.Id, wasEnabled = true);
+				foreach (var package in _packageAssemblyHierarchy)
+				{
+					bool isEnabled = true;
+					if (package.Id == null)
+					{
+						// Draw disabled toggle (for Assets)
+						EditorGUI.BeginDisabledGroup(true);
+						EditorGUILayout.Toggle(package.DisplayName, isEnabled);
+						EditorGUI.EndDisabledGroup();
+					}
+					else
+					{
+						if (_packageFilter.TryGetValue(package.Id, out var wasEnabled) == false)
+							_packageFilter.Add(package.Id, wasEnabled = true);
 
-                        isEnabled = DrawToggle(package.DisplayName, wasEnabled);
+						isEnabled = DrawToggle(package.DisplayName, wasEnabled);
 
-                        if (isEnabled != wasEnabled)
-                        {
-                            _packageFilter[package.Id] = isEnabled;
-                            isDirty = true;
-                        }
-                    }
-                    EditorGUI.indentLevel++;
-                    if (isEnabled)
-                    {
-                        isDirty = DrawAssemblyFilters(package) || isDirty;
-                    }
-                    EditorGUI.indentLevel--;
+						if (isEnabled != wasEnabled)
+						{
+							_packageFilter[package.Id] = isEnabled;
+							isDirty = true;
+						}
+					}
+					EditorGUI.indentLevel++;
+					if (isEnabled)
+					{
+						isDirty = DrawAssemblyFilters(package) || isDirty;
+					}
+					EditorGUI.indentLevel--;
 
-                }
-                EditorGUI.indentLevel--;
+				}
+				EditorGUI.indentLevel--;
 
-                if (isDirty)
-                {
-                    _generator.ExcludedPackages = _packageFilter
-                        .Where(kvp => kvp.Value == false)
-                        .Select(kvp => kvp.Key)
-                        .ToList();
+				if (isDirty)
+				{
+					_generator.ExcludedPackages = _packageFilter
+						.Where(kvp => kvp.Value == false)
+						.Select(kvp => kvp.Key)
+						.ToList();
 
-                    _generator.ExcludedAssemblies = _assemblyFilter
-                        .Where(kvp => kvp.Value == false)
-                        .Select(kvp => kvp.Key)
-                        .ToList();
-                }
-            }
+					_generator.ExcludedAssemblies = _assemblyFilter
+						.Where(kvp => kvp.Value == false)
+						.Select(kvp => kvp.Key)
+						.ToList();
+				}
+			}
 
-            EditorGUILayout.EndFoldoutHeaderGroup();
+			EditorGUILayout.EndFoldoutHeaderGroup();
 		}
 
-        private bool DrawAssemblyFilters(PackageWrapper package)
+		private bool DrawAssemblyFilters(PackageWrapper package)
 		{
 			if (package.Assemblies == null)
 				return false;
