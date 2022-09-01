@@ -202,6 +202,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			_packageAssemblyHierarchy = eligiblePackages.GroupJoin(eligibleAssemblies.Where(a => a != null && a.PackageId != null),
 				p => p.Id, a => a.PackageId,
 				(p, aa) => new PackageWrapper { Id = p.Id, DisplayName = p.DisplayName, Assemblies = aa.ToList() })
+				.Where(p => p.Assemblies.Any())
 				.ToList();
 
 			// Prepend "empty package" containing the .asmdefs in Assets folder
