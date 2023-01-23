@@ -24,14 +24,16 @@ You just replace the original package with this fork inside the `manifest.json`:
 In the dependencies find the line 
 
 ```
-"com.unity.ide.visualstudio": "2.0.16",
+"com.unity.ide.visualstudio": "2.0.17",
 ```
 
 and replace it with
 
 ```
-"com.unity.ide.visualstudio": "https://github.com/krisrok/com.unity.ide.visualstudio.git#2.0.16-advanced_package_filter",
+"com.unity.ide.visualstudio": "https://github.com/krisrok/com.unity.ide.visualstudio.git#2.0.17-advanced_package_filter",
 ```
+
+(also works for 2.0.16)
 
 ## Usage
 
