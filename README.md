@@ -19,7 +19,16 @@ turns into:
 By that you're able to remove all those projects from your Visual Studio solution you'd never look at anyway or even edit.
 
 ## Installation
-You just replace the original package with this fork inside the `manifest.json`:
+Here are the easiest ways to install the package, choose either:
+
+### A) Using package manager
+Open Package Manager, select "Add package from git URL..." and enter
+```
+https://github.com/krisrok/com.unity.ide.visualstudio.git#2.0.17-advanced_package_filter
+```
+
+### B) Edit manifest
+Replace the original package with this fork inside the `manifest.json`:
 
 In the dependencies find the line 
 
@@ -33,7 +42,7 @@ and replace it with
 "com.unity.ide.visualstudio": "https://github.com/krisrok/com.unity.ide.visualstudio.git#2.0.17-advanced_package_filter",
 ```
 
-(also works for 2.0.16)
+Also works for 2.0.16
 
 ## Usage
 
@@ -41,7 +50,7 @@ and replace it with
 2. Use the the pre-existing filters to choose between embedded, local packages and so on. (Note this functionality is already provided by Unity's original package.)
 3. Now, for finer-grained control you can open the the "Advanced Filters" foldout:
 4. Select which packages and assemblies (defined by .asmdefs) you actually want in your solution. Tip: You can also use Ctrl/Shift to add/remove checkmarks in bulk while moving your cursor over them.
-5. Click "Regenerate project files"
+5. Click "Regenerate project files" to make sure changes are applied.
 6. Open Visual Studio e.g. by opening a script. If the solution is already open Visual Studio should display a dialog to automatically re-open it.
 
 ## Note
