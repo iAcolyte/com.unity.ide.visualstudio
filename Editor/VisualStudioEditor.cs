@@ -4,7 +4,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -12,6 +11,7 @@ using System.Runtime.CompilerServices;
 using UnityEditor;
 using UnityEngine;
 using Unity.CodeEditor;
+using System.Threading;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Debug = UnityEngine.Debug;
