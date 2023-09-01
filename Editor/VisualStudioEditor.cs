@@ -340,7 +340,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
         {
             EditorGUILayout.BeginHorizontal();
             EditorGUI.BeginDisabledGroup(true);
-            EditorGUILayout.Toggle(new GUIContent(".asmdefs from Assets"), true, GUILayout.ExpandWidth(false));
+            EditorGUILayout.Toggle(new GUIContent("Assemblies from Assets"), true, GUILayout.ExpandWidth(false));
             EditorGUI.EndDisabledGroup();
             var assetsPackage = _packageAssemblyHierarchyByGenerationFlag[ProjectGenerationFlag.None].First();
             var assemblyCount = assetsPackage.Assemblies.Count();
