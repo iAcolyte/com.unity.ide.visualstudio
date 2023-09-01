@@ -277,17 +277,14 @@ namespace Microsoft.Unity.VisualStudio.Editor
         private string FormatPackageCount(int includedCount, int count) => $"{includedCount}/{count} package{(count == 1 ? "" : "s")}";
         private string FormatAssemblyCount(int includedCount, int count) => $"{includedCount}/{count} assembl{(count == 1 ? "y" : "ies")}";
 
-        private bool DrawAdvancedFiltersFoldout(ProjectGenerationFlag preference, bool isEnabled, IVisualStudioInstallation installation)
+        private bool DrawAdvancedFiltersFoldout(ProjectGenerationFlag preference, bool isEnabled, IVisualStudioInstallation installation, List<PackageWrapper> packages, int assemblyCount, int includedAssemblyCount)
         {
-            var packageCount = _packageAssemblyHierarchyByGenerationFlag.TryGetValue(preference, out var packages) ? packages.Count : 0;
+            var packageCount = packages?.Count ?? 0;
             var includedPackageCount = packages?.Count(p => installation.ProjectGenerator.ExcludedPackages.Contains(p.Id) == false) ?? 0;
-            var assemblyCount = packages?.Sum(p => p.Assemblies.Count) ?? 0;
-            var includedAssemblyCount = assemblyCount - packages?.Sum(p =>
-                installation.ProjectGenerator.ExcludedPackages.Contains(p.Id) ?
-                    p.Assemblies.Count :
-                    p.Assemblies.Count(a => installation.ProjectGenerator.ExcludedAssemblies.Contains(a.Id))) ?? 0;
+           
             var guiContent = isEnabled ? new GUIContent($"{FormatPackageCount(includedPackageCount, packageCount)}, {FormatAssemblyCount(includedAssemblyCount, assemblyCount)}") : GUIContent.none;
             var isFoldoutEnabled = isEnabled && packageCount > 0;
+
             EditorGUI.BeginDisabledGroup(isFoldoutEnabled == false);
             _showAdvancedFilters.TryGetValue(preference, out var showAdvancedFilters);
             var isFoldoutExpanded = showAdvancedFilters && isEnabled && packageCount > 0;
@@ -297,6 +294,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
                 _showAdvancedFilters[preference] = isFoldoutExpanded;
             }
             EditorGUI.EndDisabledGroup();
+
             return isFoldoutExpanded;
         }
 
@@ -309,11 +307,14 @@ namespace Microsoft.Unity.VisualStudio.Editor
                 if (package.Source != preference)
                     continue;
 
+                var assemblyCount = package.Assemblies.Count;
+                var includedAssemblyCount = package.Assemblies.Count(a => installation.ProjectGenerator.ExcludedAssemblies.Contains(a.Id) == false);
+
                 bool isEnabled = true;
                 if (_packageFilter.TryGetValue(package.Id, out var wasEnabled) == false)
                     _packageFilter.Add(package.Id, wasEnabled = true);
 
-                isEnabled = DrawToggle(package.DisplayName, wasEnabled);
+                isEnabled = DrawToggle(new GUIContent(package.DisplayName), wasEnabled, assemblyCount > includedAssemblyCount);
 
                 if (isEnabled != wasEnabled)
                 {
@@ -327,7 +328,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
                     isDirty = DrawAssemblyFilters(package) || isDirty;
                 }
                 EditorGUI.indentLevel--;
-
             }
 
             if (isDirty)
@@ -338,15 +338,22 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
         private void DrawAssetAssemblies(IVisualStudioInstallation installation)
         {
-            EditorGUILayout.BeginHorizontal();
-            EditorGUI.BeginDisabledGroup(true);
-            EditorGUILayout.Toggle(new GUIContent("Assemblies from Assets"), true, GUILayout.ExpandWidth(false));
-            EditorGUI.EndDisabledGroup();
             var assetsPackage = _packageAssemblyHierarchyByGenerationFlag[ProjectGenerationFlag.None].First();
             var assemblyCount = assetsPackage.Assemblies.Count();
             var includedAssemblyCount = assetsPackage.Assemblies.Count(a => installation.ProjectGenerator.ExcludedAssemblies.Contains(a.Id) == false);
+
+            EditorGUILayout.BeginHorizontal();
+
+            EditorGUI.BeginDisabledGroup(true);
+            if (assemblyCount > includedAssemblyCount)
+                EditorGUI.showMixedValue = true;
+            EditorGUILayout.Toggle(new GUIContent("Assemblies from Assets"), true, GUILayout.ExpandWidth(false));
+            EditorGUI.showMixedValue = false;
+            EditorGUI.EndDisabledGroup();
+            
             _showAdvancedFilters.TryGetValue(ProjectGenerationFlag.None, out var isFoldoutExpanded);
             _showAdvancedFilters[ProjectGenerationFlag.None] = EditorGUILayout.Foldout(isFoldoutExpanded, FormatAssemblyCount(includedAssemblyCount, assemblyCount), toggleOnLabelClick: true);
+            
             EditorGUILayout.EndHorizontal();
 
             if (_showAdvancedFilters[ProjectGenerationFlag.None] == false)
@@ -373,7 +380,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
                 if (_assemblyFilter.TryGetValue(assembly.Id, out var wasEnabled) == false)
                     _assemblyFilter.Add(assembly.Id, wasEnabled = true);
 
-                bool isEnabled = DrawToggle(assembly.DisplayName, wasEnabled);
+                bool isEnabled = DrawToggle(new GUIContent(assembly.DisplayName), wasEnabled);
 
                 if (isEnabled != wasEnabled)
                 {
@@ -384,9 +391,21 @@ namespace Microsoft.Unity.VisualStudio.Editor
             return isDirty;
         }
 
-        private static bool DrawToggle(string label, bool wasEnabled)
+        private static bool DrawToggle(GUIContent label, bool wasEnabled, bool showMixedValue = false, params GUILayoutOption[] options)
         {
-            var isEnabled = EditorGUILayout.Toggle(label, wasEnabled);
+            EditorGUI.showMixedValue = wasEnabled && showMixedValue;
+
+            EditorGUI.BeginChangeCheck();
+            var isEnabled = wasEnabled;
+            EditorGUILayout.Toggle(label, isEnabled, options);
+            //EditorGUILayout.BeginHorizontal();
+            //EditorGUILayout.LabelField(label, GUILayout.Width(260 - EditorGUI.indentLevel * 15));
+            //EditorGUILayout.Toggle(wasEnabled, GUILayout.Width(32), GUILayout.ExpandWidth(true));
+            //EditorGUILayout.EndHorizontal();
+            if (EditorGUI.EndChangeCheck())
+                isEnabled = !wasEnabled;
+            EditorGUI.showMixedValue = false;
+
             if (GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition))
             {
                 if (Event.current.shift)
@@ -412,15 +431,23 @@ namespace Microsoft.Unity.VisualStudio.Editor
             var generator = installation.ProjectGenerator;
             var prevValue = generator.AssemblyNameProvider.ProjectGenerationFlag.HasFlag(preference);
 
+            var packageCount = _packageAssemblyHierarchyByGenerationFlag.TryGetValue(preference, out var packages) ? packages.Count : 0;
+            var assemblyCount = packages?.Sum(p => p.Assemblies.Count) ?? 0;
+            var includedAssemblyCount = assemblyCount - packages?.Sum(p =>
+                installation.ProjectGenerator.ExcludedPackages.Contains(p.Id) ?
+                    p.Assemblies.Count :
+                    p.Assemblies.Count(a => installation.ProjectGenerator.ExcludedAssemblies.Contains(a.Id))) ?? 0;
+
             EditorGUILayout.BeginHorizontal();
-            var newValue = EditorGUILayout.Toggle(new GUIContent(guiMessage, toolTip), prevValue, GUILayout.ExpandWidth(false));
+
+            var newValue = DrawToggle(new GUIContent(guiMessage, toolTip), prevValue, showMixedValue: assemblyCount > includedAssemblyCount, GUILayout.ExpandWidth(false));
             if (newValue != prevValue)
                 generator.AssemblyNameProvider.ToggleProjectGeneration(preference);
 
             bool isFoldoutExpanded = false;
             if (newValue)
             {
-                isFoldoutExpanded = DrawAdvancedFiltersFoldout(preference, newValue, installation);
+                isFoldoutExpanded = DrawAdvancedFiltersFoldout(preference, newValue, installation, packages, assemblyCount, includedAssemblyCount);
             }
             else
             {
