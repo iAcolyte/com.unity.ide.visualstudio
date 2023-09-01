@@ -7,9 +7,9 @@ using UnityEditor.PackageManager;
 using UnityEngine;
 using Unity.CodeEditor;
 
+// Advanced filters "addons"
 namespace Microsoft.Unity.VisualStudio.Editor
 {
-    // Advanced filters "addons"
     public partial class VisualStudioEditor : IExternalCodeEditor
     {
         private class AssemblyWrapper
