@@ -156,9 +156,29 @@ namespace Microsoft.Unity.VisualStudio.Editor
             DrawAssetAssemblies(installation);
             EditorGUILayout.Space();
 
+            EditorGUILayout.BeginHorizontal();
             RegenerateProjectFiles(installation);
+            DrawResetFiltersButton(installation);
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
 
             EditorGUI.indentLevel--;
+        }
+
+        private void DrawResetFiltersButton(IVisualStudioInstallation installation)
+        {
+            var rect = EditorGUILayout.GetControlRect();
+            rect.width = 252;
+            rect.x -= 20;
+            EditorGUI.BeginDisabledGroup(_packageFilter.Count == 0 && _assemblyFilter.Count == 0);
+            if (GUI.Button(rect, "Reset filters"))
+            {
+                _packageFilter = new();
+                _assemblyFilter = new();
+                _showAdvancedFilters = new();
+                WriteBackFilters(installation);
+            }
+            EditorGUI.EndDisabledGroup();
         }
 
         private class AssemblyWrapper
