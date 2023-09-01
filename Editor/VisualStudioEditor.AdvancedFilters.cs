@@ -200,7 +200,10 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private void DrawAssetAssemblies(IVisualStudioInstallation installation)
 		{
-			var assetsPackage = _packageAssemblyHierarchyByGenerationFlag[ProjectGenerationFlag.None].First();
+			var assetsPackage = _packageAssemblyHierarchyByGenerationFlag.TryGetValue(ProjectGenerationFlag.None, out var packageWrappers) ? packageWrappers.FirstOrDefault() : null;
+			if (assetsPackage == null)
+				return;
+
 			var assemblyCount = assetsPackage.Assemblies.Count();
 			var includedAssemblyCount = assetsPackage.Assemblies.Count(a => installation.ProjectGenerator.ExcludedAssemblies.Contains(a.Id) == false);
 
@@ -222,7 +225,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				return;
 
 			EditorGUI.indentLevel++;
-			var isDirty = DrawAssemblyFilters(_packageAssemblyHierarchyByGenerationFlag[ProjectGenerationFlag.None].First());
+			var isDirty = DrawAssemblyFilters(assetsPackage);
 			EditorGUI.indentLevel--;
 
 			if (isDirty)
