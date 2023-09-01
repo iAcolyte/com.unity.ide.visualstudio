@@ -26,7 +26,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		CSharp
 	}
 
-	public interface IGenerator
+	public partial interface IGenerator
 	{
 		bool SyncIfNeeded(IEnumerable<string> affectedFiles, IEnumerable<string> reimportedFiles);
 		void Sync();
@@ -35,42 +35,15 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		string SolutionFile();
 		string ProjectDirectory { get; }
 		IAssemblyNameProvider AssemblyNameProvider { get; }
-		IList<string> ExcludedPackages { get; set; }
-		IList<string> ExcludedAssemblies { get; set; }
-		IEnumerable<UnityEditor.PackageManager.PackageInfo> PackagesFilteredByProjectGenerationFlags { get; }
 	}
 
-	public class ProjectGeneration : IGenerator
+	public partial class ProjectGeneration : IGenerator
 	{
 		// do not remove because of the Validation API, used in LegacyStyleProjectGeneration
 		public static readonly string MSBuildNamespaceUri = "http://schemas.microsoft.com/developer/msbuild/2003";
 
-		private const string _excludedPackagesPathsKeyFormat = "unity_project_generation_excludedpackages_{0}";
-		private static readonly string _excludedPackagesKey = string.Format(_excludedPackagesPathsKeyFormat, PlayerSettings.productGUID);
-		private const string _excludedAssembliesPathsKeyFormat = "unity_project_generation_excludedassemblies_{0}";
-		private static readonly string _excludedAssembliesKey = string.Format(_excludedAssembliesPathsKeyFormat, PlayerSettings.productGUID);
 		public IAssemblyNameProvider AssemblyNameProvider => m_AssemblyNameProvider;
 		public string ProjectDirectory { get; }
-
-		public IList<string> ExcludedPackages
-		{
-			get => m_ExcludedPackages;
-			set
-			{
-				EditorPrefs.SetString(_excludedPackagesKey, value == null ? "" : string.Join(";", value));
-				m_ExcludedPackages = value?.ToList() ?? new List<string>();
-			}
-		}
-
-		public IList<string> ExcludedAssemblies
-		{
-			get => m_ExcludedAssemblies;
-			set
-			{
-				EditorPrefs.SetString(_excludedAssembliesKey, value == null ? "" : string.Join(";", value));
-				m_ExcludedAssemblies = value?.ToList() ?? new List<string>();
-			}
-		}
 
 		// Use this to have the same newline ending on all platforms for consistency.
 		internal const string k_WindowsNewline = "\r\n";
@@ -94,8 +67,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		readonly IGUIDGenerator m_GUIDGenerator;
 		bool m_ShouldGenerateAll;
 		IVisualStudioInstallation m_CurrentInstallation;
-		List<string> m_ExcludedPackages = GetEditorPrefsStringList(_excludedPackagesKey);
-		List<string> m_ExcludedAssemblies = GetEditorPrefsStringList(_excludedAssembliesKey);
 
 		public ProjectGeneration() : this(Directory.GetParent(Application.dataPath).FullName)
 		{
@@ -236,49 +207,18 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private bool ShouldFileBePartOfSolution(string file)
 		{
-			if (string.IsNullOrEmpty(file.Trim()))
+			// Exclude files coming from packages except if they are internalized.
+			if (m_AssemblyNameProvider.IsInternalizedPackagePath(file))
+			{
 				return false;
+			}
 
 			if (IsSupportedFile(file) == false)
+			{
 				return false;
-
-			var packageInfo = m_AssemblyNameProvider.FindForAssetPath(file);
-			if (packageInfo != null)
-			{
-				// Exclude files coming from packages except if they are internalized...
-				if (m_AssemblyNameProvider.IsInternalizedPackage(packageInfo))
-					return false;
-
-				// ... or if they are excluded by package name
-				if (m_ExcludedPackages.Contains(packageInfo.name))
-					return false;
 			}
 
-			if (m_ExcludedAssemblies != null && m_ExcludedAssemblies.Count > 0)
-			{
-				var containingAssemblyPath = CompilationPipeline.GetAssemblyDefinitionFilePathFromScriptPath(file);
-				if (containingAssemblyPath != null)
-				{
-					// ... or if they belong to a excluded .asmdef
-					var containingAssemblyFilename = Path.GetFileName(containingAssemblyPath);
-					if (m_ExcludedAssemblies.Contains(containingAssemblyFilename))
-						return false;
-				}
-			}
-
-			return true;
-		}
-
-		public IEnumerable<UnityEditor.PackageManager.PackageInfo> PackagesFilteredByProjectGenerationFlags =>
-			UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages()
-			.Where(p => m_AssemblyNameProvider.IsInternalizedPackage(p) == false);
-
-		private static List<string> GetEditorPrefsStringList(string key)
-		{
-			return EditorPrefs.GetString(key, null)?
-				.Split(";", StringSplitOptions.RemoveEmptyEntries)
-				.ToList()
-				?? new List<string>();
+			return ShouldFileBePartOfSolutionDependingOnFilters(file);
 		}
 
 		private static string GetExtensionWithoutDot(string path)
