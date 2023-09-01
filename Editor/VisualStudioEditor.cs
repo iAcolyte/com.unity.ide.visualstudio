@@ -171,7 +171,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			var generator = installation.ProjectGenerator;
 			var prevValue = generator.AssemblyNameProvider.ProjectGenerationFlag.HasFlag(preference);
 
-			var packageCount = _packageAssemblyHierarchyByGenerationFlag.TryGetValue(preference, out var packages) ? packages.Count : 0;
+			var packageCount = _packageAssemblyHierarchyByGenerationFlag.TryGetValue(preference, out var packages) ? packages?.Count ?? 0 : 0;
 			var assemblyCount = packages?.Sum(p => p.Assemblies.Count) ?? 0;
 			var includedAssemblyCount = assemblyCount - packages?.Sum(p =>
 				installation.ProjectGenerator.ExcludedPackages.Contains(p.Id) ?
