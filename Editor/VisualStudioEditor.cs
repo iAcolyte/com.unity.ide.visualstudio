@@ -153,7 +153,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
             SettingsButton(ProjectGenerationFlag.PlayerAssemblies, "Player projects", "For each player project generate an additional csproj with the name 'project-player.csproj'", installation);
 
             EditorGUILayout.Space();
-            DrawAdvancedFilters(ProjectGenerationFlag.None, installation);
+            DrawAssetAssemblies(installation);
             EditorGUILayout.Space();
 
             RegenerateProjectFiles(installation);
@@ -173,7 +173,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
         {
             internal string Id;
             internal string DisplayName;
-            internal IEnumerable<AssemblyWrapper> Assemblies;
+            internal List<AssemblyWrapper> Assemblies;
             internal ProjectGenerationFlag Source;
         }
 
@@ -195,7 +195,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
                 {
                     Id = p.name,
                     DisplayName = string.IsNullOrWhiteSpace(p.displayName) ? p.name : p.displayName,
-                    Source = Blu(p.source)
+                    Source = ProjectGenerationFlagFromPackageSource(p.source)
                 })
                 .OrderBy(ph => ph.DisplayName);
 
@@ -236,12 +236,12 @@ namespace Microsoft.Unity.VisualStudio.Editor
             // Prepend "empty package" containing the .asmdefs in Assets folder
             var assetsAssemblies = eligibleAssemblies.Where(a => a != null && a.PackageId == null).ToList();
             if (assetsAssemblies.Count > 0)
-                _packageAssemblyHierarchy.Insert(0, new PackageWrapper { DisplayName = ".asmdefs from Assets", Assemblies = assetsAssemblies });
+                _packageAssemblyHierarchy.Insert(0, new PackageWrapper { Assemblies = assetsAssemblies });
 
             _packageAssemblyHierarchyByGenerationFlag = _packageAssemblyHierarchy.GroupBy(p => p.Source).ToDictionary(pg => pg.Key, pg => pg.ToList());
         }
 
-        private ProjectGenerationFlag Blu(PackageSource source)
+        private ProjectGenerationFlag ProjectGenerationFlagFromPackageSource(PackageSource source)
         {
             switch(source)
             {
@@ -259,6 +259,101 @@ namespace Microsoft.Unity.VisualStudio.Editor
                 .Where(p => string.IsNullOrWhiteSpace(p) == false)
                 .ToDictionary(p => p, _ => false)
                 ?? new Dictionary<string, bool>();
+        }
+
+        private void WriteBackFilters(IVisualStudioInstallation installation)
+        {
+            installation.ProjectGenerator.ExcludedPackages = _packageFilter
+                .Where(kvp => kvp.Value == false)
+                .Select(kvp => kvp.Key)
+                .ToList();
+
+            installation.ProjectGenerator.ExcludedAssemblies = _assemblyFilter
+                .Where(kvp => kvp.Value == false)
+                .Select(kvp => kvp.Key)
+                .ToList();
+        }
+
+        private string FormatPackageCount(int packageCount) => $"{packageCount} package{(packageCount == 1 ? "" : "s")}";
+        private string FormatAssemblyCount(int assemblyCount) => $"{assemblyCount} assembl{(assemblyCount == 1 ? "y" : "ies")}";
+
+        private bool DrawAdvancedFiltersFoldout(ProjectGenerationFlag preference, bool isEnabled)
+        {
+            var packageCount = _packageAssemblyHierarchyByGenerationFlag.TryGetValue(preference, out var packages) ? packages.Count : 0;
+            var assemblyCount = packages?.Sum(p => p.Assemblies.Count) ?? 0;
+            var guiContent = isEnabled ? new GUIContent($"{FormatPackageCount(packageCount)}, {FormatAssemblyCount(assemblyCount)}") : GUIContent.none;
+            var isFoldoutEnabled = isEnabled && packageCount > 0;
+            EditorGUI.BeginDisabledGroup(isFoldoutEnabled == false);
+            _showAdvancedFilters.TryGetValue(preference, out var showAdvancedFilters);
+            var isFoldoutExpanded = showAdvancedFilters && isEnabled && packageCount > 0;
+            isFoldoutExpanded = EditorGUILayout.Foldout(isFoldoutExpanded, guiContent, toggleOnLabelClick: true);
+            if (isFoldoutEnabled)
+            {
+                _showAdvancedFilters[preference] = isFoldoutExpanded;
+            }
+            EditorGUI.EndDisabledGroup();
+            return isFoldoutExpanded;
+        }
+
+        private void DrawAdvancedFilters(ProjectGenerationFlag preference, IVisualStudioInstallation installation)
+        {
+            var isDirty = false;
+
+            foreach (var package in _packageAssemblyHierarchy)
+            {
+                if (package.Source != preference)
+                    continue;
+
+                bool isEnabled = true;
+                if (_packageFilter.TryGetValue(package.Id, out var wasEnabled) == false)
+                    _packageFilter.Add(package.Id, wasEnabled = true);
+
+                isEnabled = DrawToggle(package.DisplayName, wasEnabled);
+
+                if (isEnabled != wasEnabled)
+                {
+                    _packageFilter[package.Id] = isEnabled;
+                    isDirty = true;
+                }
+
+                EditorGUI.indentLevel++;
+                if (isEnabled)
+                {
+                    isDirty = DrawAssemblyFilters(package) || isDirty;
+                }
+                EditorGUI.indentLevel--;
+
+            }
+
+            if (isDirty)
+            {
+                WriteBackFilters(installation);
+            }
+        }
+
+        private void DrawAssetAssemblies(IVisualStudioInstallation installation)
+        {
+            EditorGUILayout.BeginHorizontal();
+            EditorGUI.BeginDisabledGroup(true);
+            EditorGUILayout.Toggle(new GUIContent(".asmdefs from Assets"), true, GUILayout.ExpandWidth(false));
+            EditorGUI.EndDisabledGroup();
+            var assetsPackage = _packageAssemblyHierarchyByGenerationFlag[ProjectGenerationFlag.None].First();
+            var assemblyCount = assetsPackage.Assemblies.Count();
+            _showAdvancedFilters.TryGetValue(ProjectGenerationFlag.None, out var isFoldoutExpanded);
+            _showAdvancedFilters[ProjectGenerationFlag.None] = EditorGUILayout.Foldout(isFoldoutExpanded, FormatAssemblyCount(assemblyCount), toggleOnLabelClick: true);
+            EditorGUILayout.EndHorizontal();
+
+            if (_showAdvancedFilters[ProjectGenerationFlag.None] == false)
+                return;
+
+            EditorGUI.indentLevel++;
+            var isDirty = DrawAssemblyFilters(_packageAssemblyHierarchyByGenerationFlag[ProjectGenerationFlag.None].First());
+            EditorGUI.indentLevel--;
+
+            if (isDirty)
+            {
+                WriteBackFilters(installation);
+            }
         }
 
         private bool DrawAssemblyFilters(PackageWrapper package)
@@ -315,18 +410,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
             var newValue = EditorGUILayout.Toggle(new GUIContent(guiMessage, toolTip), prevValue, GUILayout.ExpandWidth(false));
             if (newValue != prevValue)
                 generator.AssemblyNameProvider.ToggleProjectGeneration(preference);
-            
-            var packageCount = _packageAssemblyHierarchyByGenerationFlag.TryGetValue(preference, out var packages) ? packages.Count : 0;
-            var isFoldoutEnabled = newValue && packageCount > 0;
-            EditorGUI.BeginDisabledGroup(isFoldoutEnabled == false);
-            _showAdvancedFilters.TryGetValue(preference, out var showAdvancedFilters);
-            var isFoldoutExpanded = showAdvancedFilters && newValue && packageCount > 0;
-            isFoldoutExpanded = EditorGUILayout.Foldout(isFoldoutExpanded, newValue ? new GUIContent($"{packageCount} package{(packageCount == 1 ? "" : "s")}") : GUIContent.none, true);
-            if (isFoldoutEnabled)
-            {
-                _showAdvancedFilters[preference] = isFoldoutExpanded;
-            }
-            EditorGUI.EndDisabledGroup();
+
+            bool isFoldoutExpanded = DrawAdvancedFiltersFoldout(preference, newValue);
             EditorGUILayout.EndHorizontal();
 
             if (isFoldoutExpanded == false)
@@ -335,60 +420,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
             EditorGUI.indentLevel++;
             DrawAdvancedFilters(preference, installation);
             EditorGUI.indentLevel--;
-
-        }
-
-        private void DrawAdvancedFilters(ProjectGenerationFlag preference, IVisualStudioInstallation installation)
-        {
-            var isDirty = false;
-
-            foreach (var package in _packageAssemblyHierarchy)
-            {
-                if (package.Source.ToString() != preference.ToString())
-                    continue;
-
-                bool isEnabled = true;
-                if (package.Id == null)
-                {
-                    // Draw disabled toggle (for Assets)
-                    EditorGUI.BeginDisabledGroup(true);
-                    EditorGUILayout.Toggle(package.DisplayName, isEnabled);
-                    EditorGUI.EndDisabledGroup();
-                }
-                else
-                {
-                    if (_packageFilter.TryGetValue(package.Id, out var wasEnabled) == false)
-                        _packageFilter.Add(package.Id, wasEnabled = true);
-
-                    isEnabled = DrawToggle(package.DisplayName, wasEnabled);
-
-                    if (isEnabled != wasEnabled)
-                    {
-                        _packageFilter[package.Id] = isEnabled;
-                        isDirty = true;
-                    }
-                }
-                EditorGUI.indentLevel++;
-                if (isEnabled)
-                {
-                    isDirty = DrawAssemblyFilters(package) || isDirty;
-                }
-                EditorGUI.indentLevel--;
-
-            }
-
-            if (isDirty)
-            {
-                installation.ProjectGenerator.ExcludedPackages = _packageFilter
-                    .Where(kvp => kvp.Value == false)
-                    .Select(kvp => kvp.Key)
-                    .ToList();
-
-                installation.ProjectGenerator.ExcludedAssemblies = _assemblyFilter
-                    .Where(kvp => kvp.Value == false)
-                    .Select(kvp => kvp.Key)
-                    .ToList();
-            }
         }
 
         public void SyncIfNeeded(string[] addedFiles, string[] deletedFiles, string[] movedFiles, string[] movedFromFiles, string[] importedFiles)
