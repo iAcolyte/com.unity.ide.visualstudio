@@ -11,7 +11,6 @@ using System.Runtime.CompilerServices;
 using UnityEditor;
 using UnityEngine;
 using Unity.CodeEditor;
-using Debug = UnityEngine.Debug;
 
 [assembly: InternalsVisibleTo("Unity.VisualStudio.EditorTests")]
 [assembly: InternalsVisibleTo("Unity.VisualStudio.Standalone.EditorTests")]
@@ -19,324 +18,322 @@ using Debug = UnityEngine.Debug;
 
 namespace Microsoft.Unity.VisualStudio.Editor
 {
+	[InitializeOnLoad]
+	public partial class VisualStudioEditor : IExternalCodeEditor
+	{
+		internal static bool IsOSX => Application.platform == RuntimePlatform.OSXEditor;
+		internal static bool IsWindows => !IsOSX && Path.DirectorySeparatorChar == FileUtility.WinSeparator && Environment.NewLine == "\r\n";
 
-    [InitializeOnLoad]
-    public partial class VisualStudioEditor : IExternalCodeEditor
-    {
-        internal static bool IsOSX => Application.platform == RuntimePlatform.OSXEditor;
-        internal static bool IsWindows => !IsOSX && Path.DirectorySeparatorChar == FileUtility.WinSeparator && Environment.NewLine == "\r\n";
+		CodeEditor.Installation[] IExternalCodeEditor.Installations => _discoverInstallations
+			.Result
+			.Values
+			.Select(v => v.ToCodeEditorInstallation())
+			.ToArray();
 
-        CodeEditor.Installation[] IExternalCodeEditor.Installations => _discoverInstallations
-            .Result
-            .Values
-            .Select(v => v.ToCodeEditorInstallation())
-            .ToArray();
+		private static readonly AsyncOperation<Dictionary<string, IVisualStudioInstallation>> _discoverInstallations;
 
-        private static readonly AsyncOperation<Dictionary<string, IVisualStudioInstallation>> _discoverInstallations;
+		static VisualStudioEditor()
+		{
+			if (!UnityInstallation.IsMainUnityEditorProcess)
+				return;
 
-        static VisualStudioEditor()
-        {
-            if (!UnityInstallation.IsMainUnityEditorProcess)
-                return;
+			Discovery.Initialize();
+			CodeEditor.Register(new VisualStudioEditor());
 
-            Discovery.Initialize();
-            CodeEditor.Register(new VisualStudioEditor());
-
-            _discoverInstallations = AsyncOperation<Dictionary<string, IVisualStudioInstallation>>.Run(DiscoverInstallations);
-        }
+			_discoverInstallations = AsyncOperation<Dictionary<string, IVisualStudioInstallation>>.Run(DiscoverInstallations);
+		}
 
 #if UNITY_2019_4_OR_NEWER && !UNITY_2020
-        [InitializeOnLoadMethod]
-        static void LegacyVisualStudioCodePackageDisabler()
-        {
-            // disable legacy Visual Studio Code packages
-            var editor = CodeEditor.Editor.GetCodeEditorForPath("code.cmd");
-            if (editor == null)
-                return;
+		[InitializeOnLoadMethod]
+		static void LegacyVisualStudioCodePackageDisabler()
+		{
+			// disable legacy Visual Studio Code packages
+			var editor = CodeEditor.Editor.GetCodeEditorForPath("code.cmd");
+			if (editor == null)
+				return;
 
-            if (editor is VisualStudioEditor)
-                return;
+			if (editor is VisualStudioEditor)
+				return;
 
-            CodeEditor.Unregister(editor);
-        }
+			CodeEditor.Unregister(editor);
+		}
 #endif
 
-        private static Dictionary<string, IVisualStudioInstallation> DiscoverInstallations()
-        {
-            try
-            {
-                return Discovery
-                    .GetVisualStudioInstallations()
-                    .ToDictionary(i => Path.GetFullPath(i.Path), i => i);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error detecting Visual Studio installations: {ex}");
-                return new Dictionary<string, IVisualStudioInstallation>();
-            }
-        }
+		private static Dictionary<string, IVisualStudioInstallation> DiscoverInstallations()
+		{
+			try
+			{
+				return Discovery
+					.GetVisualStudioInstallations()
+					.ToDictionary(i => Path.GetFullPath(i.Path), i => i);
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"Error detecting Visual Studio installations: {ex}");
+				return new Dictionary<string, IVisualStudioInstallation>();
+			}
+		}
 
-        internal static bool IsEnabled => CodeEditor.CurrentEditor is VisualStudioEditor && UnityInstallation.IsMainUnityEditorProcess;
+		internal static bool IsEnabled => CodeEditor.CurrentEditor is VisualStudioEditor && UnityInstallation.IsMainUnityEditorProcess;
 
-        // this one seems legacy and not used anymore
-        // keeping it for now given it is public, so we need a major bump to remove it 
-        public void CreateIfDoesntExist()
-        {
-            if (!TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation))
-                return;
+		// this one seems legacy and not used anymore
+		// keeping it for now given it is public, so we need a major bump to remove it 
+		public void CreateIfDoesntExist()
+		{
+			if (!TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation)) 
+				return;
 
-            var generator = installation.ProjectGenerator;
-            if (!generator.HasSolutionBeenGenerated())
-                generator.Sync();
-        }
+			var generator = installation.ProjectGenerator;
+			if (!generator.HasSolutionBeenGenerated())
+				generator.Sync();
+		}
 
-        public void Initialize(string editorInstallationPath)
-        {
-        }
+		public void Initialize(string editorInstallationPath)
+		{
+		}
 
-        internal virtual bool TryGetVisualStudioInstallationForPath(string editorPath, bool lookupDiscoveredInstallations, out IVisualStudioInstallation installation)
-        {
-            editorPath = Path.GetFullPath(editorPath);
+		internal virtual bool TryGetVisualStudioInstallationForPath(string editorPath, bool lookupDiscoveredInstallations, out IVisualStudioInstallation installation)
+		{
+			editorPath = Path.GetFullPath(editorPath);
 
-            // lookup for well known installations
-            if (lookupDiscoveredInstallations && _discoverInstallations.Result.TryGetValue(editorPath, out installation))
-                return true;
+			// lookup for well known installations
+			if (lookupDiscoveredInstallations && _discoverInstallations.Result.TryGetValue(editorPath, out installation))
+				return true;
 
-            return Discovery.TryDiscoverInstallation(editorPath, out installation);
-        }
+			return Discovery.TryDiscoverInstallation(editorPath, out installation);
+		}
 
-        public virtual bool TryGetInstallationForPath(string editorPath, out CodeEditor.Installation installation)
-        {
-            var result = TryGetVisualStudioInstallationForPath(editorPath, lookupDiscoveredInstallations: false, out var vsi);
-            installation = vsi?.ToCodeEditorInstallation() ?? default;
-            return result;
-        }
+		public virtual bool TryGetInstallationForPath(string editorPath, out CodeEditor.Installation installation)
+		{
+			var result = TryGetVisualStudioInstallationForPath(editorPath, lookupDiscoveredInstallations: false, out var vsi);
+			installation = vsi?.ToCodeEditorInstallation() ?? default;
+			return result;
+		}
 
-        public void OnGUI()
-        {
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
+		public void OnGUI()
+		{
+			GUILayout.BeginHorizontal();
+			GUILayout.FlexibleSpace();
 
-            if (!TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation))
-                return;
+			if (!TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation))
+				return;
 
-            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(GetType().Assembly);
+			var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(GetType().Assembly);
 
-            var style = new GUIStyle
-            {
-                richText = true,
-                margin = new RectOffset(0, 4, 0, 0)
-            };
+			var style = new GUIStyle
+			{
+				richText = true,
+				margin = new RectOffset(0, 4, 0, 0)
+			};
 
-            GUILayout.Label($"<size=10><color=grey>{package.displayName} v{package.version} enabled</color></size>", style);
-            GUILayout.EndHorizontal();
+			GUILayout.Label($"<size=10><color=grey>{package.displayName} v{package.version} enabled</color></size>", style);
+			GUILayout.EndHorizontal();
 
-            EditorGUILayout.LabelField("Generate .csproj files for:");
-            EditorGUI.indentLevel++;
+			EditorGUILayout.LabelField("Generate .csproj files for:");
+			EditorGUI.indentLevel++;
 
-            EnsureAdvancedFiltersCache(installation);
+			EnsureAdvancedFiltersCache(installation);
 
-            SettingsButton(ProjectGenerationFlag.Embedded, "Embedded packages", "", installation);
-            SettingsButton(ProjectGenerationFlag.Local, "Local packages", "", installation);
-            SettingsButton(ProjectGenerationFlag.Registry, "Registry packages", "", installation);
-            SettingsButton(ProjectGenerationFlag.Git, "Git packages", "", installation);
-            SettingsButton(ProjectGenerationFlag.BuiltIn, "Built-in packages", "", installation);
-            SettingsButton(ProjectGenerationFlag.LocalTarBall, "Local tarball", "", installation);
-            SettingsButton(ProjectGenerationFlag.Unknown, "Packages from unknown sources", "", installation);
-            SettingsButton(ProjectGenerationFlag.PlayerAssemblies, "Player projects", "For each player project generate an additional csproj with the name 'project-player.csproj'", installation);
+			SettingsButton(ProjectGenerationFlag.Embedded, "Embedded packages", "", installation);
+			SettingsButton(ProjectGenerationFlag.Local, "Local packages", "", installation);
+			SettingsButton(ProjectGenerationFlag.Registry, "Registry packages", "", installation);
+			SettingsButton(ProjectGenerationFlag.Git, "Git packages", "", installation);
+			SettingsButton(ProjectGenerationFlag.BuiltIn, "Built-in packages", "", installation);
+			SettingsButton(ProjectGenerationFlag.LocalTarBall, "Local tarball", "", installation);
+			SettingsButton(ProjectGenerationFlag.Unknown, "Packages from unknown sources", "", installation);
+			SettingsButton(ProjectGenerationFlag.PlayerAssemblies, "Player projects", "For each player project generate an additional csproj with the name 'project-player.csproj'", installation);
 
-            EditorGUILayout.Space();
-            DrawAssetAssemblies(installation);
-            EditorGUILayout.Space();
+			EditorGUILayout.Space();
+			DrawAssetAssemblies(installation);
+			EditorGUILayout.Space();
 
-            EditorGUILayout.BeginHorizontal();
-            RegenerateProjectFiles(installation);
-            DrawResetFiltersButton(installation);
-            GUILayout.FlexibleSpace();
-            EditorGUILayout.EndHorizontal();
+			EditorGUILayout.BeginHorizontal();
+			RegenerateProjectFiles(installation);
+			DrawResetFiltersButton(installation);
+			GUILayout.FlexibleSpace();
+			EditorGUILayout.EndHorizontal();
 
-            EditorGUI.indentLevel--;
-        }
+			EditorGUI.indentLevel--;
+		}
 
-        private static void RegenerateProjectFiles(IVisualStudioInstallation installation)
-        {
-            var rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
-            rect.width = 252;
-            if (GUI.Button(rect, "Regenerate project files"))
-            {
-                installation.ProjectGenerator.Sync();
-            }
-        }
+		private static void RegenerateProjectFiles(IVisualStudioInstallation installation)
+		{
+			var rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
+			rect.width = 252;
+			if (GUI.Button(rect, "Regenerate project files"))
+			{
+				installation.ProjectGenerator.Sync();
+			}
+		}
 
-        private void SettingsButton(ProjectGenerationFlag preference, string guiMessage, string toolTip, IVisualStudioInstallation installation)
-        {
-            var generator = installation.ProjectGenerator;
-            var prevValue = generator.AssemblyNameProvider.ProjectGenerationFlag.HasFlag(preference);
+		private void SettingsButton(ProjectGenerationFlag preference, string guiMessage, string toolTip, IVisualStudioInstallation installation)
+		{
+			var generator = installation.ProjectGenerator;
+			var prevValue = generator.AssemblyNameProvider.ProjectGenerationFlag.HasFlag(preference);
 
-            var packageCount = _packageAssemblyHierarchyByGenerationFlag.TryGetValue(preference, out var packages) ? packages.Count : 0;
-            var assemblyCount = packages?.Sum(p => p.Assemblies.Count) ?? 0;
-            var includedAssemblyCount = assemblyCount - packages?.Sum(p =>
-                installation.ProjectGenerator.ExcludedPackages.Contains(p.Id) ?
-                    p.Assemblies.Count :
-                    p.Assemblies.Count(a => installation.ProjectGenerator.ExcludedAssemblies.Contains(a.Id))) ?? 0;
+			var packageCount = _packageAssemblyHierarchyByGenerationFlag.TryGetValue(preference, out var packages) ? packages.Count : 0;
+			var assemblyCount = packages?.Sum(p => p.Assemblies.Count) ?? 0;
+			var includedAssemblyCount = assemblyCount - packages?.Sum(p =>
+				installation.ProjectGenerator.ExcludedPackages.Contains(p.Id) ?
+					p.Assemblies.Count :
+					p.Assemblies.Count(a => installation.ProjectGenerator.ExcludedAssemblies.Contains(a.Id))) ?? 0;
 
-            EditorGUILayout.BeginHorizontal();
+			EditorGUILayout.BeginHorizontal();
 
-            var newValue = DrawToggle(new GUIContent(guiMessage, toolTip), prevValue, showMixedValue: assemblyCount > includedAssemblyCount, GUILayout.ExpandWidth(false));
-            if (newValue != prevValue)
-                generator.AssemblyNameProvider.ToggleProjectGeneration(preference);
+			var newValue = DrawToggle(new GUIContent(guiMessage, toolTip), prevValue, showMixedValue: assemblyCount > includedAssemblyCount, GUILayout.ExpandWidth(false));
+			if (newValue != prevValue)
+				generator.AssemblyNameProvider.ToggleProjectGeneration(preference);
 
-            bool isFoldoutExpanded = false;
-            if (newValue)
-            {
-                isFoldoutExpanded = DrawAdvancedFiltersFoldout(preference, newValue, installation, packages, assemblyCount, includedAssemblyCount);
-            }
-            else
-            {
-                // draw space to avoid jumping toggles
-                EditorGUILayout.Space();
-            }
-            EditorGUILayout.EndHorizontal();
+			bool isFoldoutExpanded = false;
+			if (newValue)
+			{
+				isFoldoutExpanded = DrawAdvancedFiltersFoldout(preference, newValue, installation, packages, assemblyCount, includedAssemblyCount);
+			}
+			else
+			{
+				// draw space to avoid jumping toggles
+				EditorGUILayout.Space();
+			}
+			EditorGUILayout.EndHorizontal();
 
-            if (isFoldoutExpanded == false)
-                return;
+			if (isFoldoutExpanded == false)
+				return;
 
-            EditorGUI.indentLevel++;
-            DrawAdvancedFilters(preference, installation);
-            EditorGUI.indentLevel--;
-        }
+			EditorGUI.indentLevel++;
+			DrawAdvancedFilters(preference, installation);
+			EditorGUI.indentLevel--;
+		}
 
-        public void SyncIfNeeded(string[] addedFiles, string[] deletedFiles, string[] movedFiles, string[] movedFromFiles, string[] importedFiles)
-        {
-            if (TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation))
-            {
-                installation.ProjectGenerator.SyncIfNeeded(addedFiles.Union(deletedFiles).Union(movedFiles).Union(movedFromFiles), importedFiles);
-            }
+		public void SyncIfNeeded(string[] addedFiles, string[] deletedFiles, string[] movedFiles, string[] movedFromFiles, string[] importedFiles)
+		{
+			if (TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation))
+			{
+				installation.ProjectGenerator.SyncIfNeeded(addedFiles.Union(deletedFiles).Union(movedFiles).Union(movedFromFiles), importedFiles);
+			}
 
-            foreach (var file in importedFiles.Where(a => Path.GetExtension(a) == ".pdb"))
-            {
-                var pdbFile = FileUtility.GetAssetFullPath(file);
+			foreach (var file in importedFiles.Where(a => Path.GetExtension(a) == ".pdb"))
+			{
+				var pdbFile = FileUtility.GetAssetFullPath(file);
 
-                // skip Unity packages like com.unity.ext.nunit
-                if (pdbFile.IndexOf($"{Path.DirectorySeparatorChar}com.unity.", StringComparison.OrdinalIgnoreCase) > 0)
-                    continue;
+				// skip Unity packages like com.unity.ext.nunit
+				if (pdbFile.IndexOf($"{Path.DirectorySeparatorChar}com.unity.", StringComparison.OrdinalIgnoreCase) > 0)
+					continue;
 
-                var asmFile = Path.ChangeExtension(pdbFile, ".dll");
-                if (!File.Exists(asmFile) || !Image.IsAssembly(asmFile))
-                    continue;
+				var asmFile = Path.ChangeExtension(pdbFile, ".dll");
+				if (!File.Exists(asmFile) || !Image.IsAssembly(asmFile))
+					continue;
 
-                if (Symbols.IsPortableSymbolFile(pdbFile))
-                    continue;
+				if (Symbols.IsPortableSymbolFile(pdbFile))
+					continue;
 
-                Debug.LogWarning($"Unity is only able to load mdb or portable-pdb symbols. {file} is using a legacy pdb format.");
-            }
-        }
+				Debug.LogWarning($"Unity is only able to load mdb or portable-pdb symbols. {file} is using a legacy pdb format.");
+			}
+		}
 
-        public void SyncAll()
-        {
-            if (TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation))
-            {
-                installation.ProjectGenerator.Sync();
-            }
-        }
+		public void SyncAll()
+		{
+			if (TryGetVisualStudioInstallationForPath(CodeEditor.CurrentEditorInstallation, true, out var installation))
+			{
+				installation.ProjectGenerator.Sync();
+			}
+		}
 
-        private static bool IsSupportedPath(string path, IGenerator generator)
-        {
-            // Path is empty with "Open C# Project", as we only want to open the solution without specific files
-            if (string.IsNullOrEmpty(path))
-                return true;
+		private static bool IsSupportedPath(string path, IGenerator generator)
+		{
+			// Path is empty with "Open C# Project", as we only want to open the solution without specific files
+			if (string.IsNullOrEmpty(path))
+				return true;
 
-            // cs, uxml, uss, shader, compute, cginc, hlsl, glslinc, template are part of Unity builtin extensions
-            // txt, xml, fnt, cd are -often- par of Unity user extensions
-            // asdmdef is mandatory included
-            return generator.IsSupportedFile(path);
-        }
+			// cs, uxml, uss, shader, compute, cginc, hlsl, glslinc, template are part of Unity builtin extensions
+			// txt, xml, fnt, cd are -often- par of Unity user extensions
+			// asdmdef is mandatory included
+			return generator.IsSupportedFile(path);
+		}
 
-        public bool OpenProject(string path, int line, int column)
-        {
-            var editorPath = CodeEditor.CurrentEditorInstallation;
+		public bool OpenProject(string path, int line, int column)
+		{
+			var editorPath = CodeEditor.CurrentEditorInstallation;
 
-            if (!Discovery.TryDiscoverInstallation(editorPath, out var installation))
-            {
-                Debug.LogWarning($"Visual Studio executable {editorPath} is not found. Please change your settings in Edit > Preferences > External Tools.");
-                return false;
-            }
+			if (!Discovery.TryDiscoverInstallation(editorPath, out var installation)) {
+				Debug.LogWarning($"Visual Studio executable {editorPath} is not found. Please change your settings in Edit > Preferences > External Tools.");
+				return false;
+			}
 
-            var generator = installation.ProjectGenerator;
-            if (!IsSupportedPath(path, generator))
-                return false;
+			var generator = installation.ProjectGenerator;
+			if (!IsSupportedPath(path, generator))
+				return false;
 
-            if (!IsProjectGeneratedFor(path, generator, out var missingFlag))
-                Debug.LogWarning($"You are trying to open {path} outside a generated project. This might cause problems with IntelliSense and debugging. To avoid this, you can change your .csproj preferences in Edit > Preferences > External Tools and enable {GetProjectGenerationFlagDescription(missingFlag)} generation.");
+			if (!IsProjectGeneratedFor(path, generator, out var missingFlag))
+				Debug.LogWarning($"You are trying to open {path} outside a generated project. This might cause problems with IntelliSense and debugging. To avoid this, you can change your .csproj preferences in Edit > Preferences > External Tools and enable {GetProjectGenerationFlagDescription(missingFlag)} generation.");
 
-            var solution = GetOrGenerateSolutionFile(generator);
-            return installation.Open(path, line, column, solution);
-        }
+			var solution = GetOrGenerateSolutionFile(generator);
+			return installation.Open(path, line, column, solution);
+		}
 
-        private static string GetProjectGenerationFlagDescription(ProjectGenerationFlag flag)
-        {
-            switch (flag)
-            {
-                case ProjectGenerationFlag.BuiltIn:
-                    return "Built-in packages";
-                case ProjectGenerationFlag.Embedded:
-                    return "Embedded packages";
-                case ProjectGenerationFlag.Git:
-                    return "Git packages";
-                case ProjectGenerationFlag.Local:
-                    return "Local packages";
-                case ProjectGenerationFlag.LocalTarBall:
-                    return "Local tarball";
-                case ProjectGenerationFlag.PlayerAssemblies:
-                    return "Player projects";
-                case ProjectGenerationFlag.Registry:
-                    return "Registry packages";
-                case ProjectGenerationFlag.Unknown:
-                    return "Packages from unknown sources";
-                default:
-                    return string.Empty;
-            }
-        }
+		private static string GetProjectGenerationFlagDescription(ProjectGenerationFlag flag)
+		{
+			switch (flag)
+			{
+				case ProjectGenerationFlag.BuiltIn:
+					return "Built-in packages";
+				case ProjectGenerationFlag.Embedded:
+					return "Embedded packages";
+				case ProjectGenerationFlag.Git:
+					return "Git packages";
+				case ProjectGenerationFlag.Local:
+					return "Local packages";
+				case ProjectGenerationFlag.LocalTarBall:
+					return "Local tarball";
+				case ProjectGenerationFlag.PlayerAssemblies:
+					return "Player projects";
+				case ProjectGenerationFlag.Registry:
+					return "Registry packages";
+				case ProjectGenerationFlag.Unknown:
+					return "Packages from unknown sources";
+				default:
+					return string.Empty;
+			}
+		}
 
-        private static bool IsProjectGeneratedFor(string path, IGenerator generator, out ProjectGenerationFlag missingFlag)
-        {
-            missingFlag = ProjectGenerationFlag.None;
+		private static bool IsProjectGeneratedFor(string path, IGenerator generator, out ProjectGenerationFlag missingFlag)
+		{
+			missingFlag = ProjectGenerationFlag.None;
 
-            // No need to check when opening the whole solution
-            if (string.IsNullOrEmpty(path))
-                return true;
+			// No need to check when opening the whole solution
+			if (string.IsNullOrEmpty(path))
+				return true;
 
-            // We only want to check for cs scripts
-            if (ProjectGeneration.ScriptingLanguageForFile(path) != ScriptingLanguage.CSharp)
-                return true;
+			// We only want to check for cs scripts
+			if (ProjectGeneration.ScriptingLanguageForFile(path) != ScriptingLanguage.CSharp)
+				return true;
 
-            // Even on windows, the package manager requires relative path + unix style separators for queries
-            var basePath = generator.ProjectDirectory;
-            var relativePath = path
-                .NormalizeWindowsToUnix()
-                .Replace(basePath, string.Empty)
-                .Trim(FileUtility.UnixSeparator);
+			// Even on windows, the package manager requires relative path + unix style separators for queries
+			var basePath = generator.ProjectDirectory;
+			var relativePath = path
+				.NormalizeWindowsToUnix()
+				.Replace(basePath, string.Empty)
+				.Trim(FileUtility.UnixSeparator);
 
-            var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssetPath(relativePath);
-            if (packageInfo == null)
-                return true;
+			var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssetPath(relativePath);
+			if (packageInfo == null)
+				return true;
 
-            var source = packageInfo.source;
-            if (!Enum.TryParse<ProjectGenerationFlag>(source.ToString(), out var flag))
-                return true;
+			var source = packageInfo.source;
+			if (!Enum.TryParse<ProjectGenerationFlag>(source.ToString(), out var flag))
+				return true;
 
-            if (generator.AssemblyNameProvider.ProjectGenerationFlag.HasFlag(flag))
-                return true;
+			if (generator.AssemblyNameProvider.ProjectGenerationFlag.HasFlag(flag))
+				return true;
 
-            // Return false if we found a source not flagged for generation
-            missingFlag = flag;
-            return false;
-        }
+			// Return false if we found a source not flagged for generation
+			missingFlag = flag;
+			return false;
+		}
 
-        private static string GetOrGenerateSolutionFile(IGenerator generator)
-        {
-            generator.Sync();
-            return generator.SolutionFile();
-        }
-    }
+		private static string GetOrGenerateSolutionFile(IGenerator generator)
+		{
+			generator.Sync();
+			return generator.SolutionFile();
+		}
+	}
 }
