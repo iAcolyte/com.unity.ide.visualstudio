@@ -11,9 +11,6 @@ using System.Runtime.CompilerServices;
 using UnityEditor;
 using UnityEngine;
 using Unity.CodeEditor;
-using System.Threading;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using Debug = UnityEngine.Debug;
 
 [assembly: InternalsVisibleTo("Unity.VisualStudio.EditorTests")]
@@ -22,7 +19,7 @@ using Debug = UnityEngine.Debug;
 
 namespace Microsoft.Unity.VisualStudio.Editor
 {
-	[InitializeOnLoad]
+    [InitializeOnLoad]
 	public class VisualStudioEditor : IExternalCodeEditor
 	{
 		internal static bool IsOSX => Application.platform == RuntimePlatform.OSXEditor;
@@ -36,7 +33,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		private static readonly AsyncOperation<Dictionary<string, IVisualStudioInstallation>> _discoverInstallations;
 
-		private readonly IGenerator _generator = new ProjectGeneration();
 		private bool _showAdvancedFilters;
 		private ProjectGenerationFlag _cachedFlag;
 		private Dictionary<string, bool> _packageFilter;
@@ -151,11 +147,11 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			SettingsButton(ProjectGenerationFlag.Unknown, "Packages from unknown sources", "", installation);
 			SettingsButton(ProjectGenerationFlag.PlayerAssemblies, "Player projects", "For each player project generate an additional csproj with the name 'project-player.csproj'", installation);
 			
-			DrawAdvancedFilters();
+			DrawAdvancedFilters(installation);
 
-            RegenerateProjectFiles(installation);
+			RegenerateProjectFiles(installation);
 
-            EditorGUI.indentLevel--;
+			EditorGUI.indentLevel--;
 		}
 
 		private class AssemblyWrapper
@@ -173,25 +169,25 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			internal IEnumerable<AssemblyWrapper> Assemblies;
 		}
 
-		private void EnsureAdvancedFiltersCache()
+		private void EnsureAdvancedFiltersCache(IVisualStudioInstallation installation)
 		{
-			if (_packageFilter == null || _cachedFlag != _generator.AssemblyNameProvider.ProjectGenerationFlag)
-				InitializeAdvancedFiltersCache();
+			if (_packageFilter == null || _cachedFlag != installation.ProjectGenerator.AssemblyNameProvider.ProjectGenerationFlag)
+				InitializeAdvancedFiltersCache(installation);
 		}
 
-		private void InitializeAdvancedFiltersCache()
+		private void InitializeAdvancedFiltersCache(IVisualStudioInstallation installation)
 		{
-			_cachedFlag = _generator.AssemblyNameProvider.ProjectGenerationFlag;
+			_cachedFlag = installation.ProjectGenerator.AssemblyNameProvider.ProjectGenerationFlag;
 
-			_packageFilter = CreateFilterDictionary(_generator.ExcludedPackages);
-			_assemblyFilter = CreateFilterDictionary(_generator.ExcludedAssemblies);
+			_packageFilter = CreateFilterDictionary(installation.ProjectGenerator.ExcludedPackages);
+			_assemblyFilter = CreateFilterDictionary(installation.ProjectGenerator.ExcludedAssemblies);
 
-			var eligiblePackages = _generator.PackagesFilteredByProjectGenerationFlags
+			var eligiblePackages = installation.ProjectGenerator.PackagesFilteredByProjectGenerationFlags
 				.Select(p => new PackageWrapper { Id = p.name, DisplayName = string.IsNullOrWhiteSpace(p.displayName) ? p.name : p.displayName })
 				.OrderBy(ph => ph.DisplayName);
 
-			var filteredPackages = _generator.PackagesFilteredByProjectGenerationFlags
-				.Where(p => _generator.ExcludedPackages.Contains(p.name) == false)
+			var filteredPackages = installation.ProjectGenerator.PackagesFilteredByProjectGenerationFlags
+				.Where(p => installation.ProjectGenerator.ExcludedPackages.Contains(p.name) == false)
 				.ToList();
 
 			var eligibleAssemblies = UnityEditor.Compilation.CompilationPipeline.GetAssemblies()
@@ -206,7 +202,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 					var assemblyName = Path.GetFileName(assemblyPath);
 
-					var package = _generator.AssemblyNameProvider.FindForAssetPath(assemblyPath);
+					var package = installation.ProjectGenerator.AssemblyNameProvider.FindForAssetPath(assemblyPath);
 					if (package == null)
 								// .asmdef in /Assets, so no package
 						return new AssemblyWrapper { Id = assemblyName, Path = assemblyPath, DisplayName = assemblyName };
@@ -238,12 +234,12 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				?? new Dictionary<string, bool>();
 		}
 
-		private void DrawAdvancedFilters()
+		private void DrawAdvancedFilters(IVisualStudioInstallation installation)
 		{
 			_showAdvancedFilters = EditorGUILayout.BeginFoldoutHeaderGroup(_showAdvancedFilters, new GUIContent("Advanced filters"));
 			if (_showAdvancedFilters)
 			{
-				EnsureAdvancedFiltersCache();
+				EnsureAdvancedFiltersCache(installation);
 
 				EditorGUILayout.HelpBox("Hold Ctrl/Shift while moving the cursor over checkboxes below to bulk add/remove checkmarks", MessageType.Info);
 
@@ -251,9 +247,9 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				rect.width = 252;
 				if (GUI.Button(rect, "Reset filters"))
 				{
-					_generator.ExcludedPackages = null;
-					_generator.ExcludedAssemblies = null;
-					InitializeAdvancedFiltersCache();
+                    installation.ProjectGenerator.ExcludedPackages = null;
+                    installation.ProjectGenerator.ExcludedAssemblies = null;
+					InitializeAdvancedFiltersCache(installation);
 				}
 
 				var isDirty = false;
@@ -294,12 +290,12 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 				if (isDirty)
 				{
-					_generator.ExcludedPackages = _packageFilter
+                    installation.ProjectGenerator.ExcludedPackages = _packageFilter
 						.Where(kvp => kvp.Value == false)
 						.Select(kvp => kvp.Key)
 						.ToList();
 
-					_generator.ExcludedAssemblies = _assemblyFilter
+                    installation.ProjectGenerator.ExcludedAssemblies = _assemblyFilter
 						.Where(kvp => kvp.Value == false)
 						.Select(kvp => kvp.Key)
 						.ToList();
