@@ -24,7 +24,7 @@ Here are the easiest ways to install the package, choose either:
 ### A) Using package manager
 Open Package Manager, select "Add package from git URL..." and enter
 ```
-https://github.com/krisrok/com.unity.ide.visualstudio.git#2.0.20-advanced_package_filter
+https://github.com/krisrok/com.unity.ide.visualstudio.git#2.0.21-advanced_package_filter
 ```
 
 ### B) Edit manifest
@@ -33,16 +33,16 @@ Replace the original package with this fork inside the `manifest.json`:
 In the dependencies find the line 
 
 ```
-"com.unity.ide.visualstudio": "2.0.20",
+"com.unity.ide.visualstudio": "2.0.21",
 ```
 
 and replace it with
 
 ```
-"com.unity.ide.visualstudio": "https://github.com/krisrok/com.unity.ide.visualstudio.git#2.0.20-advanced_package_filter",
+"com.unity.ide.visualstudio": "https://github.com/krisrok/com.unity.ide.visualstudio.git#2.0.21-advanced_package_filter",
 ```
 
-Also works for 2.0.18, 2.0.17 and 2.0.16 (but not 2.0.19).
+Also works for 2.0.20, 2.0.18, 2.0.17 and 2.0.16 (but not 2.0.19).
 
 ## Usage
 
