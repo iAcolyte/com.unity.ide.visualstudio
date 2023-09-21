@@ -96,6 +96,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 		public void Initialize(string editorInstallationPath)
 		{
+			InitializeCodeWorkspace();
 		}
 
 		internal virtual bool TryGetVisualStudioInstallationForPath(string editorPath, bool lookupDiscoveredInstallations, out IVisualStudioInstallation installation)
@@ -134,6 +135,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 			GUILayout.Label($"<size=10><color=grey>{package.displayName} v{package.version} enabled</color></size>", style);
 			GUILayout.EndHorizontal();
+
+			CodeWorkspaceGUI(installation);
 
 			EditorGUILayout.LabelField("Generate .csproj files for:");
 			EditorGUI.indentLevel++;
@@ -273,6 +276,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				Debug.LogWarning($"You are trying to open {path} outside a generated project. This might cause problems with IntelliSense and debugging. To avoid this, you can change your .csproj preferences in Edit > Preferences > External Tools and enable {GetProjectGenerationFlagDescription(missingFlag)} generation.");
 
 			var solution = GetOrGenerateSolutionFile(generator);
+			solution = GetCodeWorkspaceSolution(solution);
 			return installation.Open(path, line, column, solution);
 		}
 

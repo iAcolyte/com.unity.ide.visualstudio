@@ -463,12 +463,21 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			line = Math.Max(1, line);
 			column = Math.Max(0, column);
 
-			var directory = IOPath.GetDirectoryName(solution);
+			var contextParameter = "";
+			if (!string.IsNullOrEmpty(solution)){
+				if (solution.EndsWith(".code-workspace", StringComparison.OrdinalIgnoreCase)){
+					contextParameter = $"\"{solution}\"";
+				}else{
+					var directory = IOPath.GetDirectoryName(solution);
+					contextParameter = $"\"{directory}\"";
+				}
+			}
+			
 			var application = Path;
 
 			ProcessRunner.Start(string.IsNullOrEmpty(path) ? 
-				ProcessStartInfoFor(application, $"\"{directory}\"") :
-				ProcessStartInfoFor(application, $"\"{directory}\" -g \"{path}\":{line}:{column}"));
+				ProcessStartInfoFor(application, contextParameter) :
+				ProcessStartInfoFor(application, $"{contextParameter} -g \"{path}\":{line}:{column}"));
 
 			return true;
 		}
