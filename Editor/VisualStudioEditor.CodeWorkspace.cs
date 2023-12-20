@@ -12,8 +12,8 @@ namespace Microsoft.Unity.VisualStudio.Editor
 {
 	public partial class VisualStudioEditor : IExternalCodeEditor
 	{
-		private const string _workspacePathKeyFormat = "unity_project_visualstudiocode_workspacePath_{0}";
-		private static readonly string _workspacePathKey = string.Format(_workspacePathKeyFormat, PlayerSettings.productGUID);
+		private const string _workspacePathKeyFormat = "unity_project_visualstudiocode_workspacePath_{0}_{1}";
+		private static readonly string _workspacePathKey = string.Format(_workspacePathKeyFormat, PlayerSettings.productGUID, Directory.GetCurrentDirectory().GetHashCode());
 
 		private string _workspacePath;
 		private string _workspaceAbsolutePath;
