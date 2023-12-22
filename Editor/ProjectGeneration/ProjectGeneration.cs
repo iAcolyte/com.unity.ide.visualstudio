@@ -717,13 +717,13 @@ namespace Microsoft.Unity.VisualStudio.Editor
 
 			var nullable = false;
 			var asset = AssetDatabase.FindAssets(assembly.name).FirstOrDefault(x =>
-				AssetDatabase.GUIDToAssetPath(x).EndsWith(".asmdef");
+				AssetDatabase.GUIDToAssetPath(x).EndsWith(".asmdef")
 			);
-			
+
 			if (asset is not null)
 			{
 				asset = AssetDatabase.GUIDToAssetPath(asset);
-				var csc = Path.Combine(Path.GetDirectoryName(asset),"csc.rsp");
+				var csc = Path.Combine(Path.GetDirectoryName(asset), "csc.rsp");
 				if (File.Exists(csc) && File.ReadAllText(csc).Contains("nullable:enable"))
 					nullable = true;
 			}
