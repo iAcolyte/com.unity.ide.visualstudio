@@ -6,6 +6,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 	{
 		public string ProjectGuid { get; set; } = string.Empty;
 		public string LangVersion { get; set; } = "latest";
+		public bool Nullable { get; set; } = false;
 		public string AssemblyName { get; set; } = string.Empty;
 		public string RootNamespace { get; set; } = string.Empty;
 		public string OutputPath { get; set; } = string.Empty;

@@ -258,7 +258,6 @@ namespace Microsoft.Unity.VisualStudio.Editor
 			return false;
 		}
 
-
 		private static ScriptingLanguage ScriptingLanguageFor(Assembly assembly)
 		{
 			var files = assembly.sourceFiles;
@@ -638,7 +637,7 @@ namespace Microsoft.Unity.VisualStudio.Editor
 				var key = argument
 					.Substring(1, index - 1)
 					.Trim();
-				
+
 				if (!names.Contains(key))
 					continue;
 
@@ -716,10 +715,24 @@ namespace Microsoft.Unity.VisualStudio.Editor
 		{
 			var projectType = ProjectTypeOf(assembly.name);
 
+			var nullable = false;
+			var asset = AssetDatabase.FindAssets(assembly.name).FirstOrDefault(x =>
+				AssetDatabase.GUIDToAssetPath(x).EndsWith(".asmdef");
+			);
+			
+			if (asset is not null)
+			{
+				asset = AssetDatabase.GUIDToAssetPath(asset);
+				var csc = Path.Combine(Path.GetDirectoryName(asset),"csc.rsp");
+				if (File.Exists(csc) && File.ReadAllText(csc).Contains("nullable:enable"))
+					nullable = true;
+			}
+
 			var projectProperties = new ProjectProperties
 			{
 				ProjectGuid = ProjectGuid(assembly),
 				LangVersion = GetLangVersion(assembly),
+				Nullable = nullable,
 				AssemblyName = assembly.name,
 				RootNamespace = GetRootNamespace(assembly),
 				OutputPath = assembly.outputPath,

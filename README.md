@@ -2,6 +2,13 @@
 
 Add advanced filters aiming to improve the developer experience when working with Visual Studio and Unity.
 
+## Nullable
+Add Nullable feature. Create `csc.rsp` file at the same folder as your `.asmdef`, with content:
+```
+-nullable:enable
+```
+Regenerate project files
+
 ## Rationale
 The more packages or assembly definitions you have in your project the more sluggish your Visual Studio experience becomes.
 This is most notably on startup but also when attaching Visual Studio to e.g. trigger break points.
